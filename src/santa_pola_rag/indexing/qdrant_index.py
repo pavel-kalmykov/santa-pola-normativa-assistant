@@ -22,7 +22,7 @@ def chunk_id_to_point_id(chunk_id: str) -> str:
 
 @lru_cache(maxsize=1)
 def get_qdrant_client() -> QdrantClient:
-    return QdrantClient(url=settings.qdrant_url)
+    return QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
 
 
 def ensure_collection(client: QdrantClient | None = None) -> None:

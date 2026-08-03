@@ -20,7 +20,9 @@ class Settings(BaseSettings):
     postgres_db: str = "santapola"
 
     qdrant_url: str = "http://localhost:6333"
+    qdrant_api_key: str | None = None
     elasticsearch_url: str = "http://localhost:9200"
+    elasticsearch_api_key: str | None = None
 
     minio_endpoint_url: str = "http://localhost:9000"
     minio_access_key: str = "santapola"

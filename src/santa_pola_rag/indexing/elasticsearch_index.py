@@ -28,7 +28,7 @@ INDEX_MAPPING = {
 
 @lru_cache(maxsize=1)
 def get_es_client() -> Elasticsearch:
-    return Elasticsearch(settings.elasticsearch_url)
+    return Elasticsearch(settings.elasticsearch_url, api_key=settings.elasticsearch_api_key)
 
 
 def ensure_index(client: Elasticsearch | None = None) -> None:
