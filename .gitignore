@@ -1,0 +1,31 @@
+# Environment variables (API keys)
+.env
+*.env
+
+# Python
+__pycache__/
+*.py[cod]
+.Python
+.venv/
+venv/
+
+# Data / caches (downloaded PDFs, staging artifacts)
+data/raw/
+data/cache/
+*.duckdb
+*.duckdb.wal
+
+# Docker volumes mounted locally (if any)
+.docker-data/
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Streamlit
+.streamlit/secrets.toml
