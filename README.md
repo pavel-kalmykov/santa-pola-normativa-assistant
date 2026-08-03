@@ -4,6 +4,11 @@ This is a multilingual, conversational RAG assistant over the public municipal o
 
 Residents of Santa Pola come from dozens of countries, and the official source documents are only published in Spanish. This assistant lets anyone ask "How much is the dog census fee?" or "Quand puis-je installer une terrasse sur la voie publique ?" in their own language and get an answer grounded in, and cited from, the actual ordinance.
 
+<p align="center">
+  <img src="docs/screenshots/chat.png" alt="Chat answering a question about a hairdresser's opening license, with inline citations and sources" width="600">
+  <img src="docs/screenshots/grafana.png" alt="Grafana monitoring dashboard with query volume, latency, language distribution, citation rate and user feedback" width="600">
+</p>
+
 ## Problem
 
 Santa Pola's town hall publishes ~1,470 PDFs across 22 sections of [santapola.es/ayuntamiento](https://santapola.es/ayuntamiento/). Finding the right fee, deadline or rule means knowing which of dozens of PDFs to open, in Spanish, often in a scanned/non-searchable format. This project builds a real ingestion pipeline over four "hard regulation" categories (268 PDFs), the ones residents and small businesses actually need to cite, and a conversational assistant that always answers with a source citation (document, page, URL), never from memory alone.
