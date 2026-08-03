@@ -94,6 +94,31 @@ services:
       - elasticsearch
       - tempo
 
+  ingest:
+    build: .
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+      QDRANT_URL: http://qdrant:6333
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      MINIO_ENDPOINT_URL: http://minio:9000
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
+    entrypoint:
+      - sh
+      - -c
+      - "uv run python -m santa_pola_rag.ingestion.pipeline && uv run python -m santa_pola_rag.indexing.build_index"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
   app:
     build: .
     restart: unless-stopped
@@ -108,14 +133,8 @@ services:
     ports:
       - "8501:8501"
     depends_on:
-      postgres:
-        condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      elasticsearch:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
+      ingest:
+        condition: service_completed_successfully
       tempo:
         condition: service_started
 
