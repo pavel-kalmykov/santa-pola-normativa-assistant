@@ -1,0 +1,215 @@
+{
+  "title": "Santa Pola RAG - Monitoring",
+  "uid": "santa-pola-rag",
+  "timezone": "browser",
+  "time": { "from": "now-7d", "to": "now" },
+  "refresh": "30s",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Query volume over time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "query": "*",
+          "metrics": [{ "id": "1", "type": "count" }],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "date_histogram",
+              "field": "created_at",
+              "settings": { "interval": "auto" }
+            }
+          ],
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Answer latency (total)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "query": "*",
+          "metrics": [
+            { "id": "1", "type": "avg", "field": "latency_ms" },
+            {
+              "id": "2",
+              "type": "percentiles",
+              "field": "latency_ms",
+              "settings": { "percents": ["95"] }
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "3",
+              "type": "date_histogram",
+              "field": "created_at",
+              "settings": { "interval": "auto" }
+            }
+          ],
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Question language distribution",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "options": {
+        "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^Count$/" },
+        "pieType": "pie",
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "query": "*",
+          "metrics": [{ "id": "1", "type": "count" }],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "terms",
+              "field": "question_language",
+              "settings": { "size": "10", "order": "desc", "orderBy": "_count" }
+            }
+          ],
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Citation rate",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "options": {
+        "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^Count$/" },
+        "pieType": "pie",
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "query": "*",
+          "metrics": [{ "id": "1", "type": "count" }],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "terms",
+              "field": "citation_label.keyword",
+              "settings": { "size": "2", "order": "desc", "orderBy": "_count" }
+            }
+          ],
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "User feedback (thumbs up vs down)",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "elasticsearch", "uid": "es_feedback" },
+      "options": {
+        "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^Count$/" },
+        "pieType": "pie",
+        "displayLabels": ["name", "percent"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "es_feedback" },
+          "query": "*",
+          "metrics": [{ "id": "1", "type": "count" }],
+          "bucketAggs": [
+            {
+              "id": "2",
+              "type": "terms",
+              "field": "rating_label.keyword",
+              "settings": { "size": "2", "order": "desc", "orderBy": "_count" }
+            }
+          ],
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Retrieval (search) time",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "query": "*",
+          "metrics": [
+            { "id": "1", "type": "avg", "field": "search_time_ms" },
+            {
+              "id": "2",
+              "type": "percentiles",
+              "field": "search_time_ms",
+              "settings": { "percents": ["95"] }
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "3",
+              "type": "date_histogram",
+              "field": "created_at",
+              "settings": { "interval": "auto" }
+            }
+          ],
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "LLM generation time (total minus retrieval)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
+      "targets": [
+        {
+          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "query": "*",
+          "metrics": [
+            { "id": "1", "type": "avg", "field": "llm_time_ms" },
+            {
+              "id": "2",
+              "type": "percentiles",
+              "field": "llm_time_ms",
+              "settings": { "percents": ["95"] }
+            }
+          ],
+          "bucketAggs": [
+            {
+              "id": "3",
+              "type": "date_histogram",
+              "field": "created_at",
+              "settings": { "interval": "auto" }
+            }
+          ],
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}
