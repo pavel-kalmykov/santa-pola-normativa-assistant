@@ -1,0 +1,20 @@
+page_title = "Santa Pola Vorschriften-Assistent"
+heading = "🏛️ Santa Pola Vorschriften-Assistent"
+caption = "Fragen Sie in jeder Sprache nach den städtischen Verordnungen, Steuerordnungen, Satzungen und amtlichen Bekanntmachungen von Santa Pola. Jede Antwort verweist auf ihre Quelle."
+chat_placeholder = "Stellen Sie eine Frage zu den städtischen Vorschriften von Santa Pola..."
+searching = "Suche: \"{query}\""
+results_found = "{n} Ergebnis(se) gefunden"
+no_results = "Keine Ergebnisse gefunden"
+feedback_up = "Danke für Ihr Feedback! 👍"
+feedback_down = "Danke für Ihr Feedback! 👎"
+error = "Entschuldigung, beim Erreichen des Assistenten ist ein Fehler aufgetreten. Meist ein vorübergehendes Netzwerkproblem, bitte versuchen Sie es erneut."
+about_title = "ℹ️ Über diesen Assistenten"
+about_body = """
+**Was es ist**: ein Gesprächsassistent, der Fragen zu den städtischen Vorschriften von Santa Pola (Verordnungen, Steuerordnungen, Satzungen und amtlichen Bekanntmachungen) in jeder Sprache beantwortet und dabei stets das Quelldokument und die Seite angibt.
+
+**Wie es funktioniert**: er indiziert die offiziellen PDF-Dokumente des Rathauses und kombiniert semantische Suche mit Stichwortsuche, um die relevanten Passagen zu finden; ein Sprachmodell verfasst daraus die Antwort, ohne Informationen zu erfinden, die nicht in den Dokumenten stehen.
+
+**Technischer Stack**: Ingestion mit dlt, PDFs in MinIO, hybride Suche mit Qdrant und Elasticsearch, ein Pydantic-AI-Agent auf Basis von DeepSeek, eine Streamlit-Oberfläche, Observability mit OpenTelemetry, Tempo und Grafana.
+
+**Hinweis**: Antworten werden automatisch aus den indizierten Dokumenten generiert und spiegeln möglicherweise nicht die aktuellsten Vorschriften wider; für amtliche Vorgänge stets beim Rathaus von Santa Pola nachfragen.
+"""

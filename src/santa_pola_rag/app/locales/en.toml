@@ -1,0 +1,20 @@
+page_title = "Santa Pola Regulations Assistant"
+heading = "🏛️ Santa Pola Regulations Assistant"
+caption = "Ask about Santa Pola's municipal ordinances, tax ordinances, bylaws and public notices, in any language. Every answer cites its source document."
+chat_placeholder = "Ask a question about Santa Pola's municipal regulations..."
+searching = "Searching: \"{query}\""
+results_found = "{n} result(s) found"
+no_results = "No results found"
+feedback_up = "Thanks for the feedback! 👍"
+feedback_down = "Thanks for the feedback! 👎"
+error = "Sorry, something went wrong reaching the assistant. This is usually a transient network issue, please try asking again."
+about_title = "ℹ️ About this assistant"
+about_body = """
+**What it is**: a conversational assistant that answers questions about Santa Pola's municipal regulations (ordinances, tax ordinances, bylaws and public notices), in any language, always citing the source document and page.
+
+**How it works**: it indexes the official PDF documents published by the town hall and combines semantic and keyword search to find the relevant passages; a language model drafts the answer from them, without inventing information that isn't in the documents.
+
+**Tech stack**: ingestion with dlt, PDFs stored in MinIO, hybrid search with Qdrant and Elasticsearch, a Pydantic AI agent on top of DeepSeek, a Streamlit interface, observability with OpenTelemetry, Tempo and Grafana.
+
+**Disclaimer**: answers are generated automatically from the indexed documents and may not reflect the most recent regulations; for official procedures, always confirm with the Santa Pola town hall.
+"""

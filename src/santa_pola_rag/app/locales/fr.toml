@@ -1,0 +1,20 @@
+page_title = "Assistant Reglementation Santa Pola"
+heading = "🏛️ Assistant Réglementation Santa Pola"
+caption = "Posez vos questions sur les ordonnances municipales et fiscales, les règlements et les avis publics de Santa Pola, dans n'importe quelle langue. Chaque réponse cite sa source."
+chat_placeholder = "Posez une question sur la réglementation municipale de Santa Pola..."
+searching = "Recherche : \"{query}\""
+results_found = "{n} résultat(s) trouvé(s)"
+no_results = "Aucun résultat trouvé"
+feedback_up = "Merci pour votre retour ! 👍"
+feedback_down = "Merci pour votre retour ! 👎"
+error = "Désolé, une erreur est survenue en contactant l'assistant. Il s'agit généralement d'un problème réseau temporaire, réessayez."
+about_title = "ℹ️ À propos de cet assistant"
+about_body = """
+**Ce que c'est** : un assistant conversationnel qui répond aux questions sur la réglementation municipale de Santa Pola (ordonnances, ordonnances fiscales, règlements et avis publics), dans n'importe quelle langue, en citant toujours le document et la page source.
+
+**Comment ça marche** : il indexe les documents PDF officiels publiés par la mairie et combine recherche sémantique et recherche par mots-clés pour trouver les passages pertinents ; un modèle de langage rédige la réponse à partir de ceux-ci, sans inventer d'information absente des documents.
+
+**Stack technique** : ingestion avec dlt, PDF stockés dans MinIO, recherche hybride avec Qdrant et Elasticsearch, agent Pydantic AI sur DeepSeek, interface Streamlit, observabilité avec OpenTelemetry, Tempo et Grafana.
+
+**Avertissement** : les réponses sont générées automatiquement à partir des documents indexés et peuvent ne pas refléter la réglementation la plus récente ; pour toute démarche officielle, vérifiez toujours auprès de la mairie de Santa Pola.
+"""

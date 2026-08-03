@@ -1,0 +1,20 @@
+page_title = "Assistent de Normativa de Santa Pola"
+heading = "🏛️ Assistent de Normativa de Santa Pola"
+caption = "Pregunta sobre ordenances municipals, ordenances fiscals, reglaments i bans de Santa Pola, en qualsevol idioma. Cada resposta cita el seu document d'origen."
+chat_placeholder = "Escriu una pregunta sobre la normativa municipal de Santa Pola..."
+searching = "Cercant: \"{query}\""
+results_found = "{n} resultat(s) trobat(s)"
+no_results = "No s'han trobat resultats"
+feedback_up = "Gràcies per la teua valoració! 👍"
+feedback_down = "Gràcies per la teua valoració! 👎"
+error = "Ho sentim, alguna cosa ha fallat en contactar amb l'assistent. Sol ser un problema de xarxa passatger, torna-ho a provar."
+about_title = "ℹ️ Sobre aquest assistent"
+about_body = """
+**Què és**: un assistent conversacional que respon preguntes sobre la normativa municipal de Santa Pola (ordenances, ordenances fiscals, reglaments i bans), en qualsevol idioma, citant sempre el document i la pàgina d'origen.
+
+**Com funciona**: indexa els documents PDF oficials publicats per l'Ajuntament i combina cerca semàntica i per paraules clau per trobar els fragments rellevants; un model de llenguatge redacta la resposta a partir d'ells, sense inventar informació que no siga als documents.
+
+**Stack tècnic**: ingesta amb dlt, PDFs a MinIO, cerca híbrida amb Qdrant i Elasticsearch, agent amb Pydantic AI sobre DeepSeek, interfície en Streamlit, observabilitat amb OpenTelemetry, Tempo i Grafana.
+
+**Avís**: les respostes es generen automàticament a partir dels documents indexats i poden no reflectir la normativa més recent; per a tràmits oficials, confirma sempre amb l'Ajuntament de Santa Pola.
+"""

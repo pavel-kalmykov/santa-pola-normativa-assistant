@@ -1,0 +1,20 @@
+page_title = "Asistente Normativa Santa Pola"
+heading = "🏛️ Asistente Normativa Santa Pola"
+caption = "Pregunta sobre ordenanzas municipales, ordenanzas fiscales, reglamentos y bandos de Santa Pola, en cualquier idioma. Cada respuesta cita su documento de origen."
+chat_placeholder = "Escribe una pregunta sobre la normativa municipal de Santa Pola..."
+searching = "Buscando: \"{query}\""
+results_found = "{n} resultado(s) encontrado(s)"
+no_results = "No se encontraron resultados"
+feedback_up = "¡Gracias por tu valoración! 👍"
+feedback_down = "¡Gracias por tu valoración! 👎"
+error = "Lo sentimos, algo ha fallado al contactar con el asistente. Suele ser un problema de red pasajero, prueba a preguntar de nuevo."
+about_title = "ℹ️ Sobre este asistente"
+about_body = """
+**Qué es**: un asistente conversacional que responde preguntas sobre la normativa municipal de Santa Pola (ordenanzas, ordenanzas fiscales, reglamentos y bandos), en cualquier idioma, citando siempre el documento y la página de origen.
+
+**Cómo funciona**: indexa los documentos PDF oficiales publicados por el Ayuntamiento y combina búsqueda semántica y por palabras clave para encontrar los fragmentos relevantes; un modelo de lenguaje redacta la respuesta a partir de ellos, sin inventar información que no esté en los documentos.
+
+**Stack técnico**: ingesta con dlt, PDFs en MinIO, búsqueda híbrida con Qdrant y Elasticsearch, agente con Pydantic AI sobre DeepSeek, interfaz en Streamlit, observabilidad con OpenTelemetry, Tempo y Grafana.
+
+**Aviso**: las respuestas se generan automáticamente a partir de los documentos indexados y pueden no reflejar la normativa más reciente; para trámites oficiales, confirma siempre con el Ayuntamiento de Santa Pola.
+"""
