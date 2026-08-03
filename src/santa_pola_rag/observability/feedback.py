@@ -44,7 +44,7 @@ def record_feedback(
             # See query_log.py's citation_label for why: Grafana's piechart
             # renders a plain keyword term cleanly but not a numeric field
             # with value mappings.
-            "rating_label": "👍 Positivo" if rating > 0 else "👎 Negativo",
+            "rating_label": "👍 Positive" if rating > 0 else "👎 Negative",
             "question_language": question_language,
             "created_at": datetime.now(UTC).isoformat(),
         },

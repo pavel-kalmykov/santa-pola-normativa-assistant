@@ -59,7 +59,7 @@ def record_query(
             # (see "Question language distribution"), but mangles the
             # legend labels for a numeric field even with value mappings
             # configured, so the dashboard reads this field instead.
-            "citation_label": "Con cita" if cited else "Sin cita",
+            "citation_label": "Cited" if cited else "Not cited",
             "created_at": datetime.now(UTC).isoformat(),
         },
     )
