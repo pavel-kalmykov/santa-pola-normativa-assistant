@@ -4,6 +4,8 @@ This is a multilingual, conversational RAG assistant over the public municipal o
 
 Residents of Santa Pola come from dozens of countries, and the official source documents are only published in Spanish. This assistant lets anyone ask "How much is the dog census fee?" or "Quand puis-je installer une terrasse sur la voie publique ?" in their own language and get an answer grounded in, and cited from, the actual ordinance.
 
+**Live demo:** [santa-pola-normativa-assistant.streamlit.app](https://santa-pola-normativa-assistant.streamlit.app/), running on Streamlit Community Cloud against Qdrant Cloud and Elastic Cloud.
+
 <p align="center">
   <img src="docs/screenshots/chat.png" alt="Chat answering a question about a hairdresser's opening license, with inline citations and sources" width="600">
   <img src="docs/screenshots/grafana.png" alt="Grafana monitoring dashboard with query volume, latency, language distribution, citation rate and user feedback" width="600">
@@ -103,6 +105,10 @@ For local iteration on the app's own code without rebuilding the image each time
 
 Grafana dashboard: http://localhost:3000/d/santa-pola-rag (anonymous access enabled for local use). MinIO console: http://localhost:9001.
 
+### Cloud deployment
+
+The live demo above runs the same codebase with the two search backends swapped for managed equivalents: [Qdrant Cloud](https://cloud.qdrant.io/) for vectors and [Elastic Cloud](https://www.elastic.co/cloud) for BM25 search and the query/feedback logs, both reindexed from the same staged text with no re-scraping or re-OCR needed. The Streamlit app itself deploys straight from this GitHub repo on [Streamlit Community Cloud](https://streamlit.io/cloud), which reads dependencies from `uv.lock` natively. `config.py` accepts an optional `QDRANT_API_KEY`/`ELASTICSEARCH_API_KEY` for exactly this case; against a local, unauthenticated Postgres/Qdrant/Elasticsearch stack, both stay unset.
+
 ## Evaluation
 
 ### Retrieval
@@ -178,3 +184,4 @@ The system prompt restricts the agent to Santa Pola's ordinances, tells it to tr
 | Best practice: hybrid search | [Why these choices](#why-these-choices), [Evaluation > Retrieval](#retrieval) |
 | Best practice: document re-ranking | [Evaluation > Retrieval](#retrieval): cross-encoder reranking of the RRF-fused candidates |
 | Best practice: query rewriting | [Why these choices](#why-these-choices): the agent phrases its own search queries, it never searches the raw question |
+| Bonus: cloud deployment | [Cloud deployment](#cloud-deployment); [live demo](https://santa-pola-normativa-assistant.streamlit.app/) |
