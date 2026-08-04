@@ -16,6 +16,7 @@ from pydantic_ai.messages import (
     PartStartEvent,
     TextPart,
     TextPartDelta,
+    ToolReturnPart,
 )
 from pydantic_ai.models.openai import OpenAIChatModel
 from pydantic_ai.providers.openai import OpenAIProvider
@@ -315,7 +316,15 @@ def stream_ask(
                 query = event.part.args_as_dict().get("query", "")
                 event_queue.put(StreamEvent("tool_call", query))
             elif isinstance(event, FunctionToolResultEvent):
-                event_queue.put(StreamEvent("tool_result", event.part.content))
+                # event.part is a RetryPromptPart instead of a ToolReturnPart
+                # when the model's call was rejected (bad args, denied, or a
+                # ModelRetry): its .content is a validation error list or a
+                # plain string, not the list[dict] search_ordinances returns,
+                # so treating it as search results crashed the renderer.
+                if isinstance(event.part, ToolReturnPart):
+                    event_queue.put(StreamEvent("tool_result", event.part.content))
+                else:
+                    event_queue.put(StreamEvent("tool_result", []))
 
     def worker() -> None:
         async def run_and_stream() -> None:
