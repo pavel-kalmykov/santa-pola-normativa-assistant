@@ -38,6 +38,13 @@ def ensure_index(client: Elasticsearch | None = None) -> None:
     client.indices.create(index=INDEX_NAME, body=INDEX_MAPPING)
 
 
+def reset_index(client: Elasticsearch | None = None) -> None:
+    client = client or get_es_client()
+    if client.indices.exists(index=INDEX_NAME):
+        client.indices.delete(index=INDEX_NAME)
+    ensure_index(client)
+
+
 def index_chunks(chunks: list[Chunk], client: Elasticsearch | None = None) -> None:
     client = client or get_es_client()
     ensure_index(client)

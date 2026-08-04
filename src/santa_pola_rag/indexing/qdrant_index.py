@@ -35,6 +35,13 @@ def ensure_collection(client: QdrantClient | None = None) -> None:
     )
 
 
+def reset_collection(client: QdrantClient | None = None) -> None:
+    client = client or get_qdrant_client()
+    if client.collection_exists(COLLECTION_NAME):
+        client.delete_collection(COLLECTION_NAME)
+    ensure_collection(client)
+
+
 def upsert_chunks(
     chunks: list[Chunk], vectors: list[list[float]], client: QdrantClient | None = None
 ) -> None:

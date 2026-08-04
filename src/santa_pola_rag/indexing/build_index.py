@@ -6,7 +6,11 @@ import psycopg2.extras
 from santa_pola_rag.config import settings
 from santa_pola_rag.indexing.chunking import Chunk, chunk_page
 from santa_pola_rag.indexing.elasticsearch_index import index_chunks as es_index_chunks
+from santa_pola_rag.indexing.elasticsearch_index import reset_index as es_reset_index
 from santa_pola_rag.indexing.embeddings import embed_texts
+from santa_pola_rag.indexing.qdrant_index import (
+    reset_collection as qdrant_reset_collection,
+)
 from santa_pola_rag.indexing.qdrant_index import upsert_chunks as qdrant_upsert_chunks
 
 logger = logging.getLogger(__name__)
@@ -68,6 +72,14 @@ def index_all_chunks(chunks: list[Chunk]) -> None:
 
 
 def run() -> int:
+    # Every run re-derives every chunk from scratch from the Postgres staging
+    # tables, so it's never incremental; upserting on top of a stale
+    # collection instead of resetting first leaves orphaned chunks behind
+    # whenever chunking itself changes (e.g. a different chunk_size shifts
+    # per-page piece indices), competing in search results with outdated text
+    # under an id no current chunk maps to.
+    qdrant_reset_collection()
+    es_reset_index()
     pages = fetch_pages()
     chunks = build_chunks(pages)
     index_all_chunks(chunks)
