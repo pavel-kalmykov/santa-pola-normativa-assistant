@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     postgres_user: str = "santapola"
     postgres_password: str = "santapola"
     postgres_db: str = "santapola"
+    # "require" for a managed instance (e.g. Neon), unset for local Postgres.
+    postgres_sslmode: str | None = None
 
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
@@ -28,16 +30,22 @@ class Settings(BaseSettings):
     minio_access_key: str = "santapola"
     minio_secret_key: str = "santapola123"
     minio_bucket: str = "santa-pola-pdfs"
+    # "auto" works for both: MinIO ignores it, Cloudflare R2 requires it.
+    minio_region: str = "auto"
 
     otel_exporter_otlp_endpoint: str = "http://localhost:4318"
+    otel_exporter_otlp_headers: str | None = None
     otel_service_name: str = "santa-pola-rag"
 
     @property
     def postgres_dsn(self) -> str:
-        return (
+        dsn = (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+        if self.postgres_sslmode:
+            dsn += f"?sslmode={self.postgres_sslmode}"
+        return dsn
 
 
 settings = Settings()
