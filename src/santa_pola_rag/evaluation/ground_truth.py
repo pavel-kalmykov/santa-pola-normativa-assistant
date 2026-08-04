@@ -11,8 +11,12 @@ from santa_pola_rag.indexing.chunking import Chunk, chunk_page
 DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 # Asking in a mix of languages exercises the multilingual embedding model the
-# same way real users (many of them foreign residents) would.
-LANGUAGES = ["Spanish", "English", "French", "German"]
+# same way real users (many of them foreign residents) would. Valencian is
+# included because it's one of the app's UI languages (see i18n.py) but had
+# zero ground-truth coverage: language detection can only ever return "ca"
+# for it (see language.py), same as for Catalan, so this doesn't collide with
+# the other languages here.
+LANGUAGES = ["Spanish", "English", "French", "German", "Valencian"]
 
 QUESTION_PROMPT = """\
 You are creating a retrieval evaluation set for a RAG system over Santa \
