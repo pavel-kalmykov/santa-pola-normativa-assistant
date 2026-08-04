@@ -28,6 +28,15 @@ dependencies = [
     "streamlit>=1.60.0",
 ]
 
+[project.optional-dependencies]
+# Only the ingestion pipeline needs Docling (and the torch/transformers/
+# opencv stack it pulls in for layout/table detection); the Streamlit app
+# never imports it, so keeping it out of the base install lets Streamlit
+# Community Cloud's native `uv.lock` deploy skip that whole dependency tree.
+ingestion = [
+    "docling>=2.118.0",
+]
+
 [dependency-groups]
 dev = [
     "ruff>=0.6",

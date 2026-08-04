@@ -7,10 +7,10 @@ WORKDIR /app
 # Dependencies installed in their own layer first, so an app-code-only
 # change doesn't force a full re-install of the embedding model deps.
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-install-project
+RUN uv sync --frozen --extra ingestion --no-install-project
 
 COPY . .
-RUN uv sync --frozen
+RUN uv sync --frozen --extra ingestion
 
 EXPOSE 8501
 

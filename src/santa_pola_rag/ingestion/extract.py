@@ -1,9 +1,25 @@
+import io
 import logging
+import os
 import threading
 import unicodedata
 from dataclasses import dataclass
+from functools import lru_cache
 
 import fitz  # PyMuPDF
+
+# Docling's layout/table-structure model hits a real torch.compile (inductor
+# backend) crash on at least one production PDF's specific tensor shapes;
+# must be set before torch is imported. Costs some inference speed, not
+# worth it for a one-off ingestion run over 2,800-odd pages either way.
+os.environ.setdefault("TORCHDYNAMO_DISABLE", "1")
+
+from docling.datamodel.base_models import DocumentStream, InputFormat  # noqa: E402
+from docling.datamodel.pipeline_options import PdfPipelineOptions  # noqa: E402
+from docling.document_converter import (  # noqa: E402
+    DocumentConverter,
+    PdfFormatOption,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +29,12 @@ logger = logging.getLogger(__name__)
 # real ingestion run. Serializing all fitz access avoids it at a small cost
 # to parallelism.
 _FITZ_LOCK = threading.Lock()
+
+# Docling's own thread-safety under a worker pool is unverified, and the
+# fitz deadlock above is exactly the kind of failure that's expensive to
+# debug after the fact; serializing costs little since a single convert()
+# call already covers a whole PDF (not per-page), and is not worth the risk.
+_DOCLING_LOCK = threading.Lock()
 
 # Below this many extracted characters, a page is treated as scanned/image-only
 # and routed to vision OCR instead of trusting the (likely garbage) text layer.
@@ -42,21 +64,38 @@ class PageContent:
     page_count: int
 
 
+@lru_cache(maxsize=1)
+def _docling_converter() -> DocumentConverter:
+    # OCR stays off here: a scanned/image-only page is caught by the same
+    # needs_ocr heuristic below (Docling emits little to no text for it,
+    # same as PyMuPDF did) and routed to Gemini Vision OCR elsewhere in the
+    # pipeline, which reads real handwriting/stamps far better than
+    # Docling's bundled rapidocr. This call is only for structured
+    # extraction of a page's real text and table layout.
+    options = PdfPipelineOptions(do_ocr=False, do_table_structure=True)
+    return DocumentConverter(
+        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
+    )
+
+
 def extract_pages(pdf_bytes: bytes, label: str = "") -> list[PageContent]:
+    stream = DocumentStream(name=f"{label or 'document'}.pdf", stream=io.BytesIO(pdf_bytes))
+    with _DOCLING_LOCK:
+        document = _docling_converter().convert(stream).document
+    page_count = document.num_pages()
+
     pages = []
-    with _FITZ_LOCK, fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-        page_count = doc.page_count
-        for index, page in enumerate(doc):
-            text = page.get_text("text").strip()
-            needs_ocr = len(text) < MIN_EXTRACTABLE_CHARS or _is_garbled(text)
-            pages.append(
-                PageContent(
-                    page_number=index + 1,
-                    text=text,
-                    needs_ocr=needs_ocr,
-                    page_count=page_count,
-                )
+    for page_number in range(1, page_count + 1):
+        text = document.export_to_markdown(page_no=page_number).strip()
+        needs_ocr = len(text) < MIN_EXTRACTABLE_CHARS or _is_garbled(text)
+        pages.append(
+            PageContent(
+                page_number=page_number,
+                text=text,
+                needs_ocr=needs_ocr,
+                page_count=page_count,
             )
+        )
     n_ocr = sum(1 for p in pages if p.needs_ocr)
     logger.info("%s: %d page(s), %d need OCR", label, len(pages), n_ocr)
     return pages
