@@ -4,7 +4,7 @@ This is a multilingual, conversational RAG assistant over the public municipal o
 
 Residents of Santa Pola come from dozens of countries, and the official source documents are only published in Spanish. This assistant lets anyone ask "How much is the dog census fee?" or "Quand puis-je installer une terrasse sur la voie publique ?" in their own language and get an answer grounded in, and cited from, the actual ordinance.
 
-**Live demo:** [santa-pola-normativa-assistant.streamlit.app](https://santa-pola-normativa-assistant.streamlit.app/), running on Streamlit Community Cloud against Qdrant Cloud and Elastic Cloud.
+**Live demo:** [santa-pola-normativa-assistant.streamlit.app](https://santa-pola-normativa-assistant.streamlit.app/), running on Streamlit Community Cloud against Qdrant Cloud and Elastic Cloud. **Live monitoring:** [public Grafana dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c), backed by the same Elastic Cloud indices and by traces exported to Grafana Cloud Tempo.
 
 <p align="center">
   <img src="docs/screenshots/chat.png" alt="Chat answering a question about a hairdresser's opening license, with inline citations and sources" width="600">
@@ -107,7 +107,12 @@ Grafana dashboard: http://localhost:3000/d/santa-pola-rag (anonymous access enab
 
 ### Cloud deployment
 
-The live demo above runs the same codebase with the two search backends swapped for managed equivalents: [Qdrant Cloud](https://cloud.qdrant.io/) for vectors and [Elastic Cloud](https://www.elastic.co/cloud) for BM25 search and the query/feedback logs, both reindexed from the same staged text with no re-scraping or re-OCR needed. The Streamlit app itself deploys straight from this GitHub repo on [Streamlit Community Cloud](https://streamlit.io/cloud), which reads dependencies from `uv.lock` natively. `config.py` accepts an optional `QDRANT_API_KEY`/`ELASTICSEARCH_API_KEY` for exactly this case; against a local, unauthenticated Postgres/Qdrant/Elasticsearch stack, both stay unset.
+The live demo above runs the same codebase with every backend swapped for a managed equivalent:
+
+- [Qdrant Cloud](https://cloud.qdrant.io/) for vectors and [Elastic Cloud](https://www.elastic.co/cloud) for BM25 search and the query/feedback logs, both reindexed from the same staged text with no re-scraping or re-OCR needed. `config.py` accepts an optional `QDRANT_API_KEY`/`ELASTICSEARCH_API_KEY` for exactly this case; against a local, unauthenticated Postgres/Qdrant/Elasticsearch stack, both stay unset.
+- The Streamlit app itself deploys straight from this GitHub repo on [Streamlit Community Cloud](https://streamlit.io/cloud), which reads dependencies from `uv.lock` natively.
+- Traces go to Grafana Cloud's Tempo over the same OTLP exporter, authenticated with an `OTEL_EXPORTER_OTLP_HEADERS` value in the standard `key=value` format (e.g. `Authorization=Basic <base64(instanceID:apiToken)>`); against the local, unauthenticated Tempo in `docker-compose.yml`, it stays unset.
+- [Neon](https://neon.tech/) (serverless Postgres) and [Cloudflare R2](https://developers.cloudflare.com/r2/) (S3-compatible storage) replace the local Postgres/MinIO for a fully cloud-native ingestion path, runnable from GitHub Actions instead of `docker-compose.yml`: see `.github/workflows/ingest.yml`. `config.py`'s `postgres_sslmode` (Neon requires `require`) and `minio_region` (R2 requires `auto`) exist for this.
 
 ## Evaluation
 
@@ -154,7 +159,7 @@ The Grafana dashboard (`monitoring/grafana/dashboards/santa_pola_rag.json`) read
 6. Retrieval (search) time (avg / p95): how much of the total latency is spent in `hybrid_search`
 7. LLM generation time (avg / p95): the remainder, covering narration, tool-call construction and the final answer
 
-Every agent run is also traced end-to-end (agent, LLM calls, tool execution, hybrid search, Qdrant/Elasticsearch) via OpenTelemetry to Tempo, browsable from the same Grafana instance.
+Every agent run is also traced end-to-end (agent, LLM calls, tool execution, hybrid search, Qdrant/Elasticsearch) via OpenTelemetry to Tempo, browsable from the same Grafana instance. The [public dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c) is the same layout reading from Elastic Cloud instead, fed by the live demo above.
 
 ## Prompt hardening
 
