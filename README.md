@@ -7,7 +7,8 @@ Residents of Santa Pola come from dozens of countries, and the official source d
 **Live demo:** [santa-pola-normativa-assistant.streamlit.app](https://santa-pola-normativa-assistant.streamlit.app/), running on Streamlit Community Cloud against Qdrant Cloud and Elastic Cloud. **Live monitoring:** [public Grafana dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c), backed by the same Elastic Cloud indices and by traces exported to Grafana Cloud Tempo.
 
 <p align="center">
-  <img src="docs/screenshots/chat.png" alt="Chat answering a question about a hairdresser's opening license, with inline citations and sources" width="600">
+  <img src="docs/screenshots/suggestions.png" alt="Empty chat showing clickable suggested questions, filtered to the active UI language" width="600">
+  <img src="docs/screenshots/chat.png" alt="Chat answering a question about who is liable for the household waste collection fee, with inline citations and sources" width="600">
   <img src="docs/screenshots/grafana.png" alt="Grafana monitoring dashboard with query volume, latency, language distribution, citation rate and user feedback" width="600">
 </p>
 

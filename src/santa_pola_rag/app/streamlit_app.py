@@ -5,6 +5,7 @@ import uuid
 import streamlit as st
 
 from santa_pola_rag.app.i18n import AVAILABLE_LANGUAGES, strings_for
+from santa_pola_rag.app.suggestions import suggested_questions
 from santa_pola_rag.language import detect_language
 from santa_pola_rag.observability.feedback import (
     ensure_index as ensure_feedback_index,
@@ -156,7 +157,18 @@ for index, message in enumerate(st.session_state.display_messages):
                     else strings["feedback_down"]
                 )
 
-question = st.chat_input(strings["chat_placeholder"])
+clicked_suggestion = None
+if not st.session_state.display_messages:
+    suggestions = suggested_questions(_current_ui_language())
+    if suggestions:
+        st.caption(strings["suggestions_label"])
+        for suggestion in suggestions:
+            if st.button(
+                suggestion, key=f"suggestion_{suggestion}", use_container_width=True
+            ):
+                clicked_suggestion = suggestion
+
+question = st.chat_input(strings["chat_placeholder"]) or clicked_suggestion
 
 if question:
     st.session_state.display_messages.append({"role": "user", "content": question})
