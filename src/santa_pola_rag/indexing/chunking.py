@@ -3,8 +3,18 @@ from dataclasses import dataclass
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-CHUNK_SIZE = 800
-CHUNK_OVERLAP = 150
+# A tax ordinance's tariff table (labels plus per-category euro amounts) ran
+# 1,000-1,300 chars in real cases and, at the old 800/150 setting, regularly
+# split with the labels in one chunk and the amounts in the next: the amounts
+# chunk alone reads as bare digits with almost no lexical/semantic signal, so
+# neither BM25 nor the embedding ever surfaced it and the agent reported the
+# figures as unavailable. Confirmed against a real user question ("how much
+# to get my car back from the pound") where the answer chunk never appeared
+# even in the top 50 raw candidates from either search channel. 1200/200
+# keeps tables like that in a single chunk without materially changing how
+# the rest of the (mostly prose) corpus splits.
+CHUNK_SIZE = 1200
+CHUNK_OVERLAP = 200
 
 _splitter = RecursiveCharacterTextSplitter(
     chunk_size=CHUNK_SIZE,
