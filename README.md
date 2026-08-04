@@ -14,7 +14,7 @@ Residents of Santa Pola come from dozens of countries, and the official source d
 
 ## Problem
 
-Santa Pola's town hall publishes ~1,470 PDFs across 22 sections of [santapola.es/ayuntamiento](https://santapola.es/ayuntamiento/). Finding the right fee, deadline or rule means knowing which of dozens of PDFs to open, in Spanish, often in a scanned/non-searchable format. This project builds a real ingestion pipeline over four "hard regulation" categories (268 PDFs), the ones residents and small businesses actually need to cite, and a conversational assistant that always answers with a source citation (document, page, URL), never from memory alone.
+Santa Pola's town hall publishes ~1,470 PDFs across 22 sections of [santapola.es/ayuntamiento](https://santapola.es/ayuntamiento/). Finding the right fee, deadline or rule means knowing which of dozens of PDFs to open, in Spanish, often in a scanned/non-searchable format. This project builds a real ingestion pipeline over four "hard regulation" categories (269 PDFs), the ones residents and small businesses actually need to cite, and a conversational assistant that always answers with a source citation (document, page, URL), never from memory alone.
 
 ## Dataset
 
@@ -23,19 +23,19 @@ Scraped live from santapola.es, not the course FAQ:
 | Category | Slug | PDFs |
 |---|---|---|
 | Ordenanzas Fiscales (tax ordinances) | `ordenanzas-fiscales` | 182 |
-| Reglamentos y otras Ordenanzas (bylaws) | `reglamentos-otras-ordenanzas` | 53 |
+| Reglamentos y otras Ordenanzas (bylaws) | `reglamentos-otras-ordenanzas` | 54 |
 | Bandos (public notices) | `bandos` | 23 |
 | Normativas (regulations) | `normativas` | 10 |
-| **Total** | | **268** |
+| **Total** | | **269** |
 
-268 PDFs produce 2,804 pages (352 of them scanned/image-only and OCR'd) and 8,297 indexed chunks. The category list (`santa_pola_rag/ingestion/scraper.py`) is a plain dict of slug to name, so extending to any of the other 18 sections on the town hall's site is a one-line change.
+269 PDFs produce 2,815 pages (242 of them scanned/image-only and OCR'd) and 9,904 indexed chunks. The category list (`santa_pola_rag/ingestion/scraper.py`) is a plain dict of slug to name, so extending to any of the other 18 sections on the town hall's site is a one-line change. Both the PDF and page count drift slightly over time since the site is scraped live, not from a frozen dataset.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
     A[santapola.es] -->|scrape + download| B[("MinIO<br/>raw PDF bytes")]
-    B --> C[PyMuPDF text extraction]
+    B --> C[Docling text + table extraction]
     C -->|text layer usable| F
     C -->|scanned or garbled| D["Vision OCR<br/>Gemini 2.5 Flash"]
     D --> F[dlt pipeline<br/>idempotent, merge writes]
@@ -60,7 +60,8 @@ Tempo is Grafana's own trace storage backend: every agent run is exported to it 
 ## Why these choices
 
 - Ingestion runs as a real, automated pipeline. `dlt` resources and transformers scrape the listing pages, download PDFs, extract text, and fall back to vision OCR page by page. Every run commits one category at a time to Postgres, so a late failure never loses already-completed (and already-paid) work, and pages already staged are skipped on re-runs unless `--force` is passed: OCR is a paid call, so losing the PDF cache should never mean silently re-paying for it.
-- PDFs are content-addressed objects in MinIO. `boto3` writes and reads them against a local S3-compatible bucket; `extract.py` reads bytes straight from memory (`fitz.open(stream=...)`) with no temp files. Any machine pointed at the same MinIO instance sees the same PDFs.
+- PDFs are content-addressed objects in MinIO. `boto3` writes and reads them against a local S3-compatible bucket; `extract.py` reads bytes straight from memory (Docling's `DocumentStream` over a `BytesIO`) with no temp files. Any machine pointed at the same MinIO instance sees the same PDFs.
+- Text extraction is table-aware, not just character-aware. `PyMuPDF`'s plain `page.get_text("text")` reads a page in raw left-to-right, top-to-bottom order, so a tariff table's category labels and its euro amounts end up on opposite sides of the page in the extracted text, sometimes separated by hundreds of characters. `docling` parses the page layout and exports a real Markdown table instead, keeping each label on the same row as its actual figure. This was a real, measured fix, not a hypothetical one: see "Evaluation > Retrieval" below.
 - Scanned pages and technical diagrams go through vision OCR. They're rendered to an image and sent to `google/gemini-2.5-flash` via OpenRouter, with the document's title and category injected into the prompt for context. Testing against a real evacuation diagram found it accurate but still occasionally wrong on fine print, which is exactly why every answer must cite its source page.
 - Embeddings are multilingual. `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` gives ~0.85 cosine similarity between semantically equivalent Spanish/English/French sentences at design time, and in production an English question about "Saint John's night" correctly retrieves the Spanish "Noche de San Juan" bando as the top hit.
 - Retrieval combines vector search, keyword search and reranking. Qdrant (HNSW) and Elasticsearch (BM25, Spanish analyzer) are queried in parallel and fused with Reciprocal Rank Fusion, then the fused candidates are rescored by a multilingual cross-encoder (`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`, `search/reranker.py`) that reads the actual query and passage text jointly instead of only combining two rank positions. Measured impact is in "Evaluation > Retrieval" below.
@@ -111,7 +112,7 @@ Grafana dashboard: http://localhost:3000/d/santa-pola-rag (anonymous access enab
 The live demo above runs the same codebase with every backend swapped for a managed equivalent:
 
 - [Qdrant Cloud](https://cloud.qdrant.io/) for vectors and [Elastic Cloud](https://www.elastic.co/cloud) for BM25 search and the query/feedback logs, both reindexed from the same staged text with no re-scraping or re-OCR needed. `config.py` accepts an optional `QDRANT_API_KEY`/`ELASTICSEARCH_API_KEY` for exactly this case; against a local, unauthenticated Postgres/Qdrant/Elasticsearch stack, both stay unset.
-- The Streamlit app itself deploys straight from this GitHub repo on [Streamlit Community Cloud](https://streamlit.io/cloud), which reads dependencies from `uv.lock` natively.
+- The Streamlit app itself deploys straight from this GitHub repo on [Streamlit Community Cloud](https://streamlit.io/cloud), which reads dependencies from `uv.lock` natively. Docling (and the torch/transformers/opencv stack that comes with it) lives in an `ingestion` extra rather than the base dependencies for exactly this: the app never imports it, and Streamlit Cloud's plain `uv sync` skips extras by default, so the deployed app doesn't carry that whole dependency tree just to serve chat.
 - Traces go to Grafana Cloud's Tempo over the same OTLP exporter, authenticated with an `OTEL_EXPORTER_OTLP_HEADERS` value in the standard `key=value` format (e.g. `Authorization=Basic <base64(instanceID:apiToken)>`); against the local, unauthenticated Tempo in `docker-compose.yml`, it stays unset.
 - [Neon](https://neon.tech/) (serverless Postgres) and [Cloudflare R2](https://developers.cloudflare.com/r2/) (S3-compatible storage) replace the local Postgres/MinIO for a fully cloud-native ingestion path, runnable from GitHub Actions instead of `docker-compose.yml`: see `.github/workflows/ingest.yml`. `config.py`'s `postgres_sslmode` (Neon requires `require`) and `minio_region` (R2 requires `auto`) exist for this.
 
@@ -119,22 +120,27 @@ The live demo above runs the same codebase with every backend swapped for a mana
 
 ### Retrieval
 
-30 ground-truth questions generated by an LLM from randomly sampled chunks (mixed Spanish/English/French/German, matching the assistant's real user base), evaluated at k=5 against the full 8,297-chunk corpus:
+30 ground-truth questions generated by an LLM from randomly sampled chunks (mixed Spanish/English/French/German/Valencian, matching the assistant's real user base), evaluated at k=5 against the full 9,904-chunk corpus:
 
 | Strategy | Hit rate | MRR |
 |---|---|---|
-| Vector only (Qdrant) | 16.7% | 0.090 |
-| Text only (Elasticsearch BM25) | 26.7% | 0.233 |
-| Hybrid (RRF), no reranking | 20.0% | 0.130 |
-| **Hybrid (RRF) + cross-encoder reranking** | **40.0%** | **0.332** |
+| Vector only (Qdrant) | 30.0% | 0.171 |
+| Text only (Elasticsearch BM25) | 40.0% | 0.247 |
+| Hybrid (RRF), no reranking | 36.7% | 0.236 |
+| **Hybrid (RRF) + cross-encoder reranking** | **60.0%** | **0.457** |
 
-BM25 still outperforms embeddings alone on this corpus: hundreds of tax ordinances share near-identical boilerplate paragraphs (a chunk about "TASA POR X" is semantically close to dozens of other "TASA POR Y" chunks), which confuses a general-purpose multilingual encoder more than it confuses exact-term lexical matching. Plain RRF fusion still lands *below* BM25 alone (20.0% vs 26.7%) rather than between the two, for the same reason: a chunk that merely appears in the vector channel's noisy top-50 can outrank a chunk BM25 ranked highly but the vector channel missed entirely. Reranking the top 20 RRF-fused candidates with a multilingual cross-encoder fixes this, since it scores the actual query against the actual candidate text jointly instead of only combining two rank positions, and doubles the hit rate. This configuration is kept as the default because it is also the only one with a real retrieval path for non-Spanish questions (an English question about "Saint John's night" only succeeds through the vector channel; BM25 alone returns nothing relevant for it), which this 30-question aggregate, dominated by same-language matches, doesn't fully capture.
+BM25 still outperforms embeddings alone on this corpus: hundreds of tax ordinances share near-identical boilerplate paragraphs (a chunk about "TASA POR X" is semantically close to dozens of other "TASA POR Y" chunks), which confuses a general-purpose multilingual encoder more than it confuses exact-term lexical matching. Plain RRF fusion still lands *below* BM25 alone (36.7% vs 40.0%) rather than between the two, for the same reason: a chunk that merely appears in the vector channel's noisy top-50 can outrank a chunk BM25 ranked highly but the vector channel missed entirely. Reranking the top 20 RRF-fused candidates with a multilingual cross-encoder fixes this, since it scores the actual query against the actual candidate text jointly instead of only combining two rank positions, and roughly doubles the hit rate over either channel alone. This configuration is kept as the default because it is also the only one with a real retrieval path for non-Spanish questions (an English question about "Saint John's night" only succeeds through the vector channel; BM25 alone returns nothing relevant for it), which this 30-question aggregate, dominated by same-language matches, doesn't fully capture.
 
-Chunk size was widened from 800 to 1,200 characters (overlap from 150 to 200) after a real user question ("how much will I pay to get my towed car back") went unanswered: the vehicle-impound ordinance's tariff table split with the category labels in one chunk and the euro amounts in the next, and the amounts-only chunk carried so little lexical or semantic signal on its own that neither search channel ever surfaced it, not even in the top 50 raw candidates before fusion or reranking. Keeping small tables like that in a single chunk raised every metric above, including vector-only hit rate (3.3% before, 16.7% after), since the wider chunks also give the multilingual encoder more surrounding context to embed. These are real, un-cherry-picked evaluation results, not target numbers; `eval/retrieval_results.json` has the raw output. Regenerate with `uv run python scripts/generate_ground_truth.py && uv run python scripts/evaluate_retrieval.py`.
+Two extraction/chunking fixes drove the jump from an earlier 30.0%/0.186 baseline to the numbers above, both traced to the same real user question ("how much will I pay to get my towed car back") going unanswered:
+
+1. Chunk size was widened from 800 to 1,200 characters (overlap from 150 to 200): the vehicle-impound ordinance's tariff table was splitting with the category labels in one chunk and the euro amounts in the next, and the amounts-only chunk carried so little lexical or semantic signal on its own that neither search channel ever surfaced it, not even in the top 50 raw candidates before fusion or reranking.
+2. PDF text extraction moved from `PyMuPDF`'s plain `page.get_text("text")` to `docling`, which parses table layout into real Markdown tables instead of a left-to-right character stream. Even with the wider chunk size, a table's labels and figures could still land far apart in a flat text stream; keeping each row intact fixed that at the source and raised every metric above again, including vector-only hit rate (16.7% with the chunk-size fix alone, 30.0% with both fixes), since a properly laid-out table also gives the multilingual encoder a cleaner unit of meaning to embed.
+
+These are real, un-cherry-picked evaluation results, not target numbers; `eval/retrieval_results.json` has the raw output. Regenerate with `uv run python scripts/generate_ground_truth.py && uv run python scripts/evaluate_retrieval.py`.
 
 ### Answer quality (LLM-as-judge)
 
-`google/gemini-2.5-flash` (a different model and provider than the answer-generating `deepseek-chat`, to avoid self-preference bias) scores each answer on relevance, faithfulness to the retrieved context, and citation presence, reasoning step by step before a pass/fail verdict (`evaluation/llm_judge.py`). On 10 ground-truth questions, against the current retrieval pipeline (hybrid RRF with cross-encoder reranking, widened chunking): **8/10 passed**, up from 6/10 before the chunk size fix and 4/10 before reranking was added, tracking the retrieval improvements above. Full transcript in `eval/rag_judge_results.json`; regenerate with `uv run python scripts/evaluate_rag.py`.
+`google/gemini-2.5-flash` (a different model and provider than the answer-generating `deepseek-chat`, to avoid self-preference bias) scores each answer on relevance, faithfulness to the retrieved context, and citation presence, reasoning step by step before a pass/fail verdict (`evaluation/llm_judge.py`). On 10 ground-truth questions, against the current retrieval pipeline (hybrid RRF with cross-encoder reranking, Docling extraction, widened chunking): **8/10 passed**, matching the score after the chunk-size fix alone and up from 4/10 before reranking was added. Full transcript in `eval/rag_judge_results.json`; regenerate with `uv run python scripts/evaluate_rag.py`.
 
 The remaining failures are a direct consequence of retrieval gaps, not the agent inventing facts from nothing: the judge's reasoning in the failed cases is that the retrieved context doesn't contain the specific figure or row the question asks about, while the agent still produces a confident, plausibly-cited answer instead of declining. This is precisely the failure mode mandatory citation defends against: even when the agent is confidently wrong, the user has a page number to go check themselves. It also points at the clearest next improvement: the agent should be pushed harder, via prompt or a retrieval-confidence check, to say "not found" rather than answer from a partial context.
 
@@ -170,7 +176,7 @@ The system prompt restricts the agent to Santa Pola's ordinances, tells it to tr
 
 ## Limitations and future work
 
-- Retrieval hit rate, even after reranking (40.0% hybrid @k=5), still has real, measured room to grow, driven by hundreds of near-duplicate tax-ordinance chunks. A concrete example: the exact answer to "how much is a hairdresser's opening license" is indexed verbatim (`K.- Peluquerías y esteticistas ... 249,15 €`), and search finds it reliably with the near-exact phrase or once title-context and reranking are applied, but this class of dense, list-heavy tariff table remains harder to retrieve from a natural paraphrase than free-flowing prose. This was also the root cause of a real 49-tool-call runaway loop for that exact question before `MAX_SEARCHES_PER_TURN` was added: the agent kept rephrasing instead of finding the chunk, since no rephrasing it tried was the one that mattered. The specific failure mode of a table splitting its labels from its values across a chunk boundary is fixed (see "Retrieval" above), but a table that fits within one chunk yet still reads as mostly digits to a natural-language query is a harder, still-open case.
+- Retrieval hit rate, even after reranking (60.0% hybrid @k=5), still has real, measured room to grow, driven by hundreds of near-duplicate tax-ordinance chunks: a chunk about "TASA POR X 2024" is lexically and semantically close to the near-identical "TASA POR X 2025" and "...2026" chunks, and the recency bonus in `search/hybrid.py` only nudges ties, it doesn't resolve genuine ambiguity about which year's figure the question is actually asking about. Dense, list-heavy tariff tables used to be a second, compounding problem on top of that: a table split across a chunk boundary, or laid out as bare digits once PyMuPDF's linear text extraction separated a row's label from its own figure, was the root cause of a real 49-tool-call runaway loop for one such question before `MAX_SEARCHES_PER_TURN` was added, and of a real user's thumbs-down after the search budget ran out with the figures still unfound. Both failure modes are fixed now (see "Retrieval" above: wider chunking keeps small tables intact, and `docling`'s table-aware extraction keeps each row's label next to its own figure); the near-duplicate-years problem above is the one that remains open.
 - The agent should decline more readily when retrieved context is partial, instead of answering confidently from an incomplete excerpt (see the LLM-as-judge analysis above).
 - A structured LLM output (a typed schema instead of free text) would remove the citation-formatting failure class in "Output format compliance" by construction, but needs a way to stream a structured field's text live without exposing the underlying JSON deltas to the chat UI, which the current streaming setup doesn't yet do.
 - Only 4 of santapola.es's 22 document categories are ingested; adding more is a one-line change to `CATEGORIES` in `scraper.py`.
