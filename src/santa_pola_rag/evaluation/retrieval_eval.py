@@ -2,7 +2,7 @@ import logging
 from collections.abc import Callable
 
 from santa_pola_rag.evaluation.ground_truth import GroundTruthItem
-from santa_pola_rag.indexing import elasticsearch_index, qdrant_index
+from santa_pola_rag.indexing import opensearch_index, pgvector_index
 from santa_pola_rag.indexing.embeddings import embed_query
 from santa_pola_rag.search.hybrid import hybrid_search
 
@@ -14,12 +14,12 @@ RetrievalFn = Callable[[str, int], list[str]]
 
 
 def vector_only(query: str, top_k: int) -> list[str]:
-    results = qdrant_index.search(embed_query(query), top_k=top_k)
+    results = pgvector_index.search(embed_query(query), top_k=top_k)
     return [r["chunk_id"] for r in results]
 
 
 def text_only(query: str, top_k: int) -> list[str]:
-    results = elasticsearch_index.search(query, top_k=top_k)
+    results = opensearch_index.search(query, top_k=top_k)
     return [r["chunk_id"] for r in results]
 
 

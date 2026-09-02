@@ -8,8 +8,6 @@ from santa_pola_rag.config import settings
 from santa_pola_rag.indexing.build_index import fetch_pages
 from santa_pola_rag.indexing.chunking import Chunk, chunk_page
 
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
-
 # Asking in a mix of languages exercises the multilingual embedding model the
 # same way real users (many of them foreign residents) would. Valencian is
 # included because it's one of the app's UI languages (see i18n.py) but had
@@ -41,7 +39,7 @@ class GroundTruthItem:
 
 
 def _client() -> OpenAI:
-    return OpenAI(base_url=DEEPSEEK_BASE_URL, api_key=settings.deepseek_api_key)
+    return OpenAI(base_url=settings.llm_base_url, api_key=settings.llm_api_key)
 
 
 def _sample_chunks(n_samples: int, seed: int = 42) -> list[Chunk]:
@@ -77,7 +75,7 @@ def generate_ground_truth(n_samples: int = 40, seed: int = 42) -> list[GroundTru
             language=language, title=chunk.title, text=chunk.text
         )
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model=settings.llm_model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.7,
         )

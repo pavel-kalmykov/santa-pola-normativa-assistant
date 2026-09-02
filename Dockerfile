@@ -1,5 +1,14 @@
 FROM python:3.13-slim
 
+# opencv-python (a transitive docling dependency, pulled in for image
+# preprocessing) needs these X11/GL runtime libraries even in a headless
+# container; python:3.13-slim ships none of them by default.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libxcb1 \
+    libgl1 \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
 RUN pip install --no-cache-dir uv
 
 WORKDIR /app

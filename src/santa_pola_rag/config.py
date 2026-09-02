@@ -10,7 +10,14 @@ class Settings(BaseSettings):
         env_file=PROJECT_ROOT / ".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    deepseek_api_key: str
+    # Main chat/RAG model, any OpenAI-Chat-Completions-compatible provider
+    # (Z.ai's coding plan by default; DeepSeek or OpenRouter, including a
+    # free OpenRouter model, are drop-in via these three vars alone, no code
+    # change needed).
+    llm_base_url: str = "https://api.z.ai/api/coding/paas/v4"
+    llm_model: str = "glm-4.6"
+    llm_api_key: str
+
     openrouter_api_key: str
 
     postgres_host: str = "localhost"
@@ -21,10 +28,12 @@ class Settings(BaseSettings):
     # "require" for a managed instance (e.g. Neon), unset for local Postgres.
     postgres_sslmode: str | None = None
 
-    qdrant_url: str = "http://localhost:6333"
-    qdrant_api_key: str | None = None
-    elasticsearch_url: str = "http://localhost:9200"
-    elasticsearch_api_key: str | None = None
+    # BM25 text search. Credentials only needed for a managed deployment
+    # (e.g. Aiven for OpenSearch, which uses basic auth user+password);
+    # local docker-compose is unauthenticated.
+    opensearch_url: str = "http://localhost:9200"
+    opensearch_api_key: str | None = None
+    opensearch_user: str | None = None
 
     minio_endpoint_url: str = "http://localhost:9000"
     minio_access_key: str = "santapola"
@@ -45,6 +54,11 @@ class Settings(BaseSettings):
         )
         if self.postgres_sslmode:
             dsn += f"?sslmode={self.postgres_sslmode}"
+        # Without this, an unreachable host that swallows packets instead of
+        # refusing (firewall, wrong DNS) hangs each connection attempt for
+        # the OS's ~75s TCP timeout; measured end to end at ~4.5 minutes
+        # before the friendly error with the 3 retries in hybrid_search.
+        dsn += f"{'&' if '?' in dsn else '?'}connect_timeout=5"
         return dsn
 
 

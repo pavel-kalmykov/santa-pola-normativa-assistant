@@ -1,11 +1,17 @@
 apiVersion: 1
 
 # Grafana's file-based provisioning only adds/updates entries listed below;
-# it doesn't prune ones removed from this file, so the old Postgres
-# datasource (dropped once query/feedback logs moved to Elasticsearch)
-# stayed around as an orphaned, unused entry until deleted explicitly here.
+# it doesn't prune ones removed from this file, so a renamed/retired
+# datasource stays around as an orphaned, unused entry until deleted
+# explicitly here (happened once already when query/feedback logs moved
+# from Postgres to Elasticsearch; happening again now the other way, moving
+# from Elasticsearch to OpenSearch).
 deleteDatasources:
   - name: Postgres
+    orgId: 1
+  - name: Elasticsearch-Queries
+    orgId: 1
+  - name: Elasticsearch-Feedback
     orgId: 1
 
 datasources:
@@ -15,23 +21,31 @@ datasources:
     access: proxy
     url: http://tempo:3200
 
-  - name: Elasticsearch-Queries
-    uid: es_queries
-    type: elasticsearch
+  # grafana-opensearch-datasource, not the built-in Elasticsearch type:
+  # OpenSearch diverged enough from Elastic's own plugin that Grafana Labs
+  # maintains a dedicated one instead (installed via GF_INSTALL_PLUGINS in
+  # docker-compose.yml).
+  - name: OpenSearch-Queries
+    uid: os_queries
+    type: grafana-opensearch-datasource
     access: proxy
-    url: http://elasticsearch:9200
-    database: santa_pola_queries
+    url: http://opensearch:9200
     jsonData:
+      flavor: opensearch
+      version: "2.19.1"
+      database: santa_pola_queries
       timeField: created_at
-      esVersion: "8.0.0"
+      pplEnabled: false
     isDefault: true
 
-  - name: Elasticsearch-Feedback
-    uid: es_feedback
-    type: elasticsearch
+  - name: OpenSearch-Feedback
+    uid: os_feedback
+    type: grafana-opensearch-datasource
     access: proxy
-    url: http://elasticsearch:9200
-    database: santa_pola_feedback
+    url: http://opensearch:9200
     jsonData:
+      flavor: opensearch
+      version: "2.19.1"
+      database: santa_pola_feedback
       timeField: created_at
-      esVersion: "8.0.0"
+      pplEnabled: false

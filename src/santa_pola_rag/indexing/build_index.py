@@ -5,13 +5,13 @@ import psycopg2.extras
 
 from santa_pola_rag.config import settings
 from santa_pola_rag.indexing.chunking import Chunk, chunk_page
-from santa_pola_rag.indexing.elasticsearch_index import index_chunks as es_index_chunks
-from santa_pola_rag.indexing.elasticsearch_index import reset_index as es_reset_index
 from santa_pola_rag.indexing.embeddings import embed_texts
-from santa_pola_rag.indexing.qdrant_index import (
-    reset_collection as qdrant_reset_collection,
+from santa_pola_rag.indexing.opensearch_index import index_chunks as os_index_chunks
+from santa_pola_rag.indexing.opensearch_index import reset_index as os_reset_index
+from santa_pola_rag.indexing.pgvector_index import reset_table as pgvector_reset_table
+from santa_pola_rag.indexing.pgvector_index import (
+    upsert_chunks as pgvector_upsert_chunks,
 )
-from santa_pola_rag.indexing.qdrant_index import upsert_chunks as qdrant_upsert_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,8 @@ def index_all_chunks(chunks: list[Chunk]) -> None:
     for start in range(0, len(chunks), EMBEDDING_BATCH_SIZE):
         batch = chunks[start : start + EMBEDDING_BATCH_SIZE]
         vectors = embed_texts([chunk.text for chunk in batch])
-        qdrant_upsert_chunks(batch, vectors)
-        es_index_chunks(batch)
+        pgvector_upsert_chunks(batch, vectors)
+        os_index_chunks(batch)
         logger.info(
             "Indexed chunks %d-%d of %d", start, start + len(batch), len(chunks)
         )
@@ -78,8 +78,8 @@ def run() -> int:
     # whenever chunking itself changes (e.g. a different chunk_size shifts
     # per-page piece indices), competing in search results with outdated text
     # under an id no current chunk maps to.
-    qdrant_reset_collection()
-    es_reset_index()
+    pgvector_reset_table()
+    os_reset_index()
     pages = fetch_pages()
     chunks = build_chunks(pages)
     index_all_chunks(chunks)
@@ -89,4 +89,4 @@ def run() -> int:
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     n_chunks = run()
-    print(f"Indexed {n_chunks} chunks into Qdrant and Elasticsearch")
+    print(f"Indexed {n_chunks} chunks into pgvector and OpenSearch")

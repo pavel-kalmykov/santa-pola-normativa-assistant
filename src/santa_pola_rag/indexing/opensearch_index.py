@@ -1,15 +1,19 @@
 from functools import lru_cache
 
-from elasticsearch import Elasticsearch
-from elasticsearch.helpers import bulk
+from opensearchpy import OpenSearch
+from opensearchpy.helpers import bulk
 
 from santa_pola_rag.config import settings
 from santa_pola_rag.indexing.chunking import Chunk
 
 INDEX_NAME = "santa_pola_chunks"
 
-# Source documents are in Spanish; the built-in "spanish" analyzer stems
-# Spanish text (e.g. "ordenanzas" / "ordenanza") for better BM25 recall.
+# BM25 text search only: benchmarked against its own k-NN plugin for the
+# vector side too, but pgvector won that comparison (see retrieval_eval.py's
+# vector_only/text_only results), so this index carries no embedding field.
+# Spanish analyzer mirrors what the retired Elasticsearch index used, so the
+# BM25 side is a genuine like-for-like replacement, not an accidentally
+# weaker one (confirmed identical hit_rate/MRR in the benchmark).
 INDEX_MAPPING = {
     "mappings": {
         "properties": {
@@ -27,26 +31,36 @@ INDEX_MAPPING = {
 
 
 @lru_cache(maxsize=1)
-def get_es_client() -> Elasticsearch:
-    return Elasticsearch(settings.elasticsearch_url, api_key=settings.elasticsearch_api_key)
+def get_client() -> OpenSearch:
+    # Token-auth offerings only need the api_key; basic-auth ones like Aiven
+    # also need the real username, which OPENSEARCH_USER carries. The "x"
+    # placeholder keeps token-only setups working unchanged.
+    return OpenSearch(
+        settings.opensearch_url,
+        http_auth=(settings.opensearch_user or "x", settings.opensearch_api_key)
+        if settings.opensearch_api_key
+        else None,
+        use_ssl=settings.opensearch_url.startswith("https"),
+        verify_certs=True,
+    )
 
 
-def ensure_index(client: Elasticsearch | None = None) -> None:
-    client = client or get_es_client()
+def ensure_index(client: OpenSearch | None = None) -> None:
+    client = client or get_client()
     if client.indices.exists(index=INDEX_NAME):
         return
     client.indices.create(index=INDEX_NAME, body=INDEX_MAPPING)
 
 
-def reset_index(client: Elasticsearch | None = None) -> None:
-    client = client or get_es_client()
+def reset_index(client: OpenSearch | None = None) -> None:
+    client = client or get_client()
     if client.indices.exists(index=INDEX_NAME):
         client.indices.delete(index=INDEX_NAME)
     ensure_index(client)
 
 
-def index_chunks(chunks: list[Chunk], client: Elasticsearch | None = None) -> None:
-    client = client or get_es_client()
+def index_chunks(chunks: list[Chunk], client: OpenSearch | None = None) -> None:
+    client = client or get_client()
     ensure_index(client)
 
     actions = [
@@ -69,14 +83,11 @@ def index_chunks(chunks: list[Chunk], client: Elasticsearch | None = None) -> No
     bulk(client, actions)
 
 
-def search(
-    query: str, top_k: int = 10, client: Elasticsearch | None = None
-) -> list[dict]:
-    client = client or get_es_client()
+def search(query: str, top_k: int = 10, client: OpenSearch | None = None) -> list[dict]:
+    client = client or get_client()
     response = client.search(
         index=INDEX_NAME,
-        query={"match": {"text": query}},
-        size=top_k,
+        body={"query": {"match": {"text": query}}, "size": top_k},
     )
     return [
         {"score": hit["_score"], **hit["_source"]} for hit in response["hits"]["hits"]

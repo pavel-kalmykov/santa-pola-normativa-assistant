@@ -24,9 +24,12 @@ from pydantic_ai.settings import ModelSettings
 
 from santa_pola_rag.config import settings
 from santa_pola_rag.language import detect_language
-from santa_pola_rag.search.hybrid import hybrid_search
+from santa_pola_rag.search.hybrid import (
+    hybrid_search,
+    text_search_degraded,
+    vector_search_degraded,
+)
 
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 # The OpenAI SDK (which pydantic-ai's OpenAI-compatible provider wraps) has no
 # default timeout: a stalled connection would hang the agent indefinitely.
 _HTTP_CLIENT = httpx.AsyncClient(timeout=60.0)
@@ -35,7 +38,7 @@ _HTTP_CLIENT = httpx.AsyncClient(timeout=60.0)
 # exact figure asked for (e.g. a tariff buried in an alphabetically-keyed
 # table), the model keeps reformulating the query instead of concluding it
 # isn't there, spiraling into dozens of searches for one question (a real
-# run hit 49). Each one is a paid Qdrant + Elasticsearch round trip, so this
+# run hit 49). Each one is a real pgvector + OpenSearch round trip, so this
 # is a cost and latency problem, not just a UX one. A system-prompt request
 # to "search efficiently" doesn't reliably stop this (prompts are requests,
 # not guarantees); the cap below is enforced in code instead.
@@ -55,7 +58,10 @@ Rules:
   match them.
 - Every substantive claim MUST be backed by a citation. Cite inline with a \
   bracketed number right after the claim, e.g. "...de 8 a 20h [1]." Never \
-  write the title, page or URL inline in a sentence.
+  write the title, page or URL inline in a sentence. If a single claim needs \
+  more than one source, write each number in its own brackets right next to \
+  each other, e.g. "...artículos 21 y 29 [1][2]." Never combine numbers into \
+  one bracket like "[1, 2]".
 - After the full answer, on new lines, list every distinct source you cited \
   exactly once, in the order first cited, in this exact literal format and \
   nothing else: "[n] <title>, p. <page_number>, <url>". If the same \
@@ -129,10 +135,10 @@ Scope and security:
 """
 
 model = OpenAIChatModel(
-    "deepseek-chat",
+    settings.llm_model,
     provider=OpenAIProvider(
-        base_url=DEEPSEEK_BASE_URL,
-        api_key=settings.deepseek_api_key,
+        base_url=settings.llm_base_url,
+        api_key=settings.llm_api_key,
         http_client=_HTTP_CLIENT,
     ),
 )
@@ -146,6 +152,8 @@ class AgentDeps:
 
     search_count: int = field(default=0)
     search_time_ms: float = field(default=0.0)
+    text_search_degraded: bool = field(default=False)
+    vector_search_degraded: bool = field(default=False)
 
 
 # DeepSeek's own default (1.0, tuned for general conversation) left room for
@@ -159,6 +167,21 @@ agent = Agent(
     deps_type=AgentDeps,
     model_settings=ModelSettings(temperature=0.3),
 )
+
+TITLE_SYSTEM_PROMPT = """\
+Generate a short chat title summarizing the question and answer below: at \
+most 6 words, no surrounding quotes, no trailing punctuation, in the same \
+language as the question. Reply with only the title, nothing else."""
+
+# No tools, no citation/language rules: titling is a much smaller task than
+# answering, and reusing the main agent's system prompt would drag in rules
+# (search budget, citation format) that don't apply here.
+title_agent = Agent(model=model, system_prompt=TITLE_SYSTEM_PROMPT)
+
+
+def generate_title(question: str, answer: str) -> str:
+    result = title_agent.run_sync(f"Question: {question}\nAnswer: {answer}")
+    return result.output.strip()
 
 
 @agent.instructions
@@ -219,6 +242,15 @@ def search_ordinances(ctx: RunContext[AgentDeps], query: str) -> list[dict]:
     start = time.monotonic()
     results = hybrid_search(query, top_k=5)
     ctx.deps.search_time_ms += (time.monotonic() - start) * 1000
+    # hybrid_search() flags degradation via a ContextVar, which is thread-
+    # local: stream_ask() runs the whole agent loop on its own worker thread
+    # (see below), so that flag never reaches the caller's thread directly.
+    # Copying it into ctx.deps here works because deps is a plain shared
+    # object, read back through holder once the worker thread finishes.
+    if text_search_degraded.get():
+        ctx.deps.text_search_degraded = True
+    if vector_search_degraded.get():
+        ctx.deps.vector_search_degraded = True
     return [
         {
             "title": r.title,
@@ -290,9 +322,19 @@ def stream_ask(
     with the full message history (for conversational memory) once the
     iterator is exhausted; `.error` is set if the run failed; `.search_time_ms`
     is the total time spent inside real `hybrid_search()` calls, so callers
-    can log how much of the overall latency was retrieval versus the LLM.
+    can log how much of the overall latency was retrieval versus the LLM;
+    `.text_search_degraded`/`.vector_search_degraded` are True if any search
+    this turn fell back to the other channel (see search_ordinances below for
+    why this can't just be read from hybrid.py's own ContextVars after the
+    fact).
     """
-    holder = SimpleNamespace(messages=None, error=None, search_time_ms=0.0)
+    holder = SimpleNamespace(
+        messages=None,
+        error=None,
+        search_time_ms=0.0,
+        text_search_degraded=False,
+        vector_search_degraded=False,
+    )
     event_queue: queue.Queue = queue.Queue()
     deps = AgentDeps()
 
@@ -336,6 +378,8 @@ def stream_ask(
             )
             holder.messages = result.all_messages()
             holder.search_time_ms = deps.search_time_ms
+            holder.text_search_degraded = deps.text_search_degraded
+            holder.vector_search_degraded = deps.vector_search_degraded
 
         try:
             asyncio.run(run_and_stream())

@@ -1,6 +1,10 @@
 services:
   postgres:
-    image: postgres:17
+    # pgvector/pgvector:pg17 is plain postgres:17 with the pgvector extension
+    # precompiled in: doubles as the dlt staging store and the vector store
+    # (see indexing/pgvector_index.py), so a managed instance (Neon) covers
+    # both without a separate vector database account.
+    image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-santapola}
@@ -16,31 +20,22 @@ services:
       timeout: 5s
       retries: 10
 
-  qdrant:
-    image: qdrant/qdrant:v1.18.3
-    restart: unless-stopped
-    ports:
-      - "6333:6333"
-      - "6334:6334"
-    volumes:
-      - qdrant_data:/qdrant/storage
-    healthcheck:
-      test: ["CMD-SHELL", "bash -c 'cat < /dev/null > /dev/tcp/localhost/6333'"]
-      interval: 5s
-      timeout: 5s
-      retries: 10
-
-  elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:9.4.4
+  opensearch:
+    # BM25 text search (see indexing/opensearch_index.py). Chosen over
+    # Elasticsearch specifically because Elastic Cloud has no free tier that
+    # doesn't expire; OpenSearch's own k-NN plugin was also benchmarked for
+    # the vector side but lost to pgvector (retrieval_eval.py), so this index
+    # only carries text.
+    image: opensearchproject/opensearch:2.19.1
     restart: unless-stopped
     environment:
       discovery.type: single-node
-      xpack.security.enabled: "false"
-      ES_JAVA_OPTS: "-Xms512m -Xmx512m"
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
     ports:
       - "9200:9200"
     volumes:
-      - elasticsearch_data:/usr/share/elasticsearch/data
+      - opensearch_data:/usr/share/opensearch/data
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health || exit 1"]
       interval: 5s
@@ -84,6 +79,10 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
       GF_FEATURE_TOGGLES_ENABLE: "traceqlEditor"
+      # Not bundled with core Grafana: OpenSearch diverged enough from
+      # Elastic's own datasource plugin that Grafana Labs ships a dedicated
+      # one instead.
+      GF_INSTALL_PLUGINS: "grafana-opensearch-datasource"
     ports:
       - "3000:3000"
     volumes:
@@ -91,7 +90,7 @@ services:
       - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     depends_on:
-      - elasticsearch
+      - opensearch
       - tempo
 
   ingest:
@@ -101,8 +100,7 @@ services:
       - .env
     environment:
       POSTGRES_HOST: postgres
-      QDRANT_URL: http://qdrant:6333
-      ELASTICSEARCH_URL: http://elasticsearch:9200
+      OPENSEARCH_URL: http://opensearch:9200
       MINIO_ENDPOINT_URL: http://minio:9000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
     entrypoint:
@@ -112,9 +110,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      qdrant:
-        condition: service_healthy
-      elasticsearch:
+      opensearch:
         condition: service_healthy
       minio:
         condition: service_healthy
@@ -126,8 +122,7 @@ services:
       - .env
     environment:
       POSTGRES_HOST: postgres
-      QDRANT_URL: http://qdrant:6333
-      ELASTICSEARCH_URL: http://elasticsearch:9200
+      OPENSEARCH_URL: http://opensearch:9200
       MINIO_ENDPOINT_URL: http://minio:9000
       OTEL_EXPORTER_OTLP_ENDPOINT: http://tempo:4318
     ports:
@@ -140,8 +135,7 @@ services:
 
 volumes:
   postgres_data:
-  qdrant_data:
-  elasticsearch_data:
+  opensearch_data:
   minio_data:
   tempo_data:
   grafana_data:

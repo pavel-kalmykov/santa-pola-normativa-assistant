@@ -1,11 +1,90 @@
+import logging
 import re
+import time
+from contextvars import ContextVar
 from dataclasses import dataclass
 
+import psycopg2
+from opensearchpy.exceptions import ConnectionError as OpenSearchConnectionError
 from opentelemetry import trace
 
-from santa_pola_rag.indexing import elasticsearch_index, qdrant_index
+from santa_pola_rag.indexing import opensearch_index, pgvector_index
 from santa_pola_rag.indexing.embeddings import embed_query
 from santa_pola_rag.search.reranker import rerank_scores
+
+logger = logging.getLogger(__name__)
+
+# Streamlit runs each session on its own thread, so a plain module-level flag
+# would leak one user's degraded search into another user's concurrent
+# request; a ContextVar is thread-local, which a plain variable isn't. These
+# only ever get set to True (never reset to False) by the search functions
+# below: agent.py's search_ordinances OR-accumulates them into ctx.deps
+# across every search_ordinances call in one turn, so "did anything degrade
+# this turn" survives a later call that happens to succeed.
+text_search_degraded: ContextVar[bool] = ContextVar("text_search_degraded", default=False)
+vector_search_degraded: ContextVar[bool] = ContextVar(
+    "vector_search_degraded", default=False
+)
+
+_VECTOR_RETRY_ATTEMPTS = 3
+_TEXT_RETRY_ATTEMPTS = 2
+_RETRY_BASE_DELAY_S = 1.5
+_PGVECTOR_EXCEPTIONS = (psycopg2.OperationalError, psycopg2.InterfaceError)
+
+
+class RetrievalUnavailableError(Exception):
+    """Both the vector and text backends are still unreachable after
+    retrying: there is nothing left to rank or answer from. Either one alone
+    degrades to the other (see _search_vector/_search_text below) rather
+    than failing outright, since both are independently valid standalone
+    retrieval methods (confirmed by retrieval_eval.py's own vector_only/
+    text_only benchmarks), not one "core" channel and one "optional" extra."""
+
+
+def _search_vector(query_vector: list[float], top_k: int) -> tuple[list[dict], bool]:
+    """Returns (results, failed). `failed` is True only once retries are
+    exhausted, distinguishing a genuinely down backend from a working one
+    that just found nothing, since the caller must not raise on the latter."""
+    for attempt in range(_VECTOR_RETRY_ATTEMPTS):
+        try:
+            return pgvector_index.search(query_vector, top_k=top_k), False
+        except _PGVECTOR_EXCEPTIONS as exc:
+            if attempt < _VECTOR_RETRY_ATTEMPTS - 1:
+                logger.warning(
+                    "pgvector search failed (attempt %d/%d), retrying: %s",
+                    attempt + 1,
+                    _VECTOR_RETRY_ATTEMPTS,
+                    exc,
+                )
+                time.sleep(_RETRY_BASE_DELAY_S * (2**attempt))
+                continue
+            logger.warning(
+                "pgvector unreachable after retrying, falling back to text-only search"
+            )
+            return [], True
+    raise AssertionError("unreachable")  # loop always returns above
+
+
+def _search_text(query: str, top_k: int) -> tuple[list[dict], bool]:
+    """Returns (results, failed); see _search_vector's docstring for why."""
+    for attempt in range(_TEXT_RETRY_ATTEMPTS):
+        try:
+            return opensearch_index.search(query, top_k=top_k), False
+        except OpenSearchConnectionError as exc:
+            if attempt < _TEXT_RETRY_ATTEMPTS - 1:
+                logger.warning(
+                    "OpenSearch search failed (attempt %d/%d), retrying: %s",
+                    attempt + 1,
+                    _TEXT_RETRY_ATTEMPTS,
+                    exc,
+                )
+                time.sleep(_RETRY_BASE_DELAY_S)
+                continue
+            logger.warning(
+                "OpenSearch unreachable after retrying, falling back to vector-only search"
+            )
+            return [], True
+    raise AssertionError("unreachable")  # loop always returns above
 
 # Standard Reciprocal Rank Fusion constant (Cormack et al., 2009): dampens the
 # influence of rank position so a mediocre rank in one list doesn't dominate.
@@ -72,15 +151,23 @@ def _to_rank_map(results: list[dict]) -> dict[str, tuple[int, dict]]:
 def hybrid_search(
     query: str, top_k: int = 5, candidate_k: int = 50
 ) -> list[SearchResult]:
-    """Fuse Qdrant vector search and Elasticsearch BM25 search results with RRF."""
+    """Fuse pgvector vector search and OpenSearch BM25 search results with RRF."""
     with _tracer.start_as_current_span("hybrid_search") as span:
         span.set_attribute("search.query", query)
         span.set_attribute("search.top_k", top_k)
         span.set_attribute("search.candidate_k", candidate_k)
 
         query_vector = embed_query(query)
-        vector_results = qdrant_index.search(query_vector, top_k=candidate_k)
-        text_results = elasticsearch_index.search(query, top_k=candidate_k)
+        vector_results, vector_failed = _search_vector(query_vector, candidate_k)
+        text_results, text_failed = _search_text(query, candidate_k)
+        if vector_failed:
+            vector_search_degraded.set(True)
+        if text_failed:
+            text_search_degraded.set(True)
+        if vector_failed and text_failed:
+            raise RetrievalUnavailableError(
+                "Both retrieval backends unreachable after retrying"
+            )
         span.set_attribute("search.n_vector_results", len(vector_results))
         span.set_attribute("search.n_text_results", len(text_results))
 

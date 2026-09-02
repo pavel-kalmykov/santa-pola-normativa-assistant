@@ -10,10 +10,10 @@
       "title": "Query volume over time",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
           "query": "*",
           "metrics": [{ "id": "1", "type": "count" }],
           "bucketAggs": [
@@ -33,11 +33,11 @@
       "title": "Answer latency (total)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
       "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
           "query": "*",
           "metrics": [
             { "id": "1", "type": "avg", "field": "latency_ms" },
@@ -65,7 +65,7 @@
       "title": "Question language distribution",
       "type": "piechart",
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
-      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
       "options": {
         "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^Count$/" },
         "pieType": "pie",
@@ -74,7 +74,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
           "query": "*",
           "metrics": [{ "id": "1", "type": "count" }],
           "bucketAggs": [
@@ -94,7 +94,7 @@
       "title": "Citation rate",
       "type": "piechart",
       "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
-      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
       "options": {
         "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^Count$/" },
         "pieType": "pie",
@@ -103,7 +103,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
           "query": "*",
           "metrics": [{ "id": "1", "type": "count" }],
           "bucketAggs": [
@@ -123,7 +123,7 @@
       "title": "User feedback (thumbs up vs down)",
       "type": "piechart",
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
-      "datasource": { "type": "elasticsearch", "uid": "es_feedback" },
+      "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_feedback" },
       "options": {
         "reduceOptions": { "values": true, "calcs": ["lastNotNull"], "fields": "/^Count$/" },
         "pieType": "pie",
@@ -132,7 +132,7 @@
       },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "es_feedback" },
+          "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_feedback" },
           "query": "*",
           "metrics": [{ "id": "1", "type": "count" }],
           "bucketAggs": [
@@ -152,11 +152,11 @@
       "title": "Retrieval (search) time",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
       "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
           "query": "*",
           "metrics": [
             { "id": "1", "type": "avg", "field": "search_time_ms" },
@@ -184,11 +184,11 @@
       "title": "LLM generation time (total minus retrieval)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+      "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
       "fieldConfig": { "defaults": { "unit": "ms" }, "overrides": [] },
       "targets": [
         {
-          "datasource": { "type": "elasticsearch", "uid": "es_queries" },
+          "datasource": { "type": "grafana-opensearch-datasource", "uid": "os_queries" },
           "query": "*",
           "metrics": [
             { "id": "1", "type": "avg", "field": "llm_time_ms" },
