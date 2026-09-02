@@ -4,7 +4,12 @@ _FOOTNOTE_LINE_RE = re.compile(
     r"^\[(?P<num>\d+)\]\s*(?P<title>.+),\s*p\.\s*(?P<page>\d+),\s*(?P<url>\S+)\s*$",
     re.MULTILINE,
 )
-_INLINE_MARKER_RE = re.compile(r"\[(\d+)\]")
+# Matches both the requested "[1][2]" (two separate matches) and the
+# malformed "[1, 2]" the model has been observed writing anyway despite the
+# system prompt's explicit example (prompts are requests, not guarantees):
+# capturing the whole comma-separated list lets replace_marker below render
+# every number in it instead of leaving an unmatched "[1, 2]" as dead text.
+_INLINE_MARKER_RE = re.compile(r"\[(\d+(?:\s*,\s*\d+)*)\]")
 # The model isn't asked to produce HTML, but was observed doing so anyway
 # once (wrapping the whole citation list in a stray <p>...</p>), which broke
 # _FOOTNOTE_LINE_RE's start-of-line anchor for the first entry and glued the
@@ -61,10 +66,10 @@ def render_footnotes(answer: str, message_id: int, language_code: str | None) ->
     canonical_by_source: dict[tuple[str, str, str], int] = {}
     occurrences_by_canonical: dict[int, int] = {}
 
-    def replace_marker(match: re.Match) -> str:
-        source = raw_sources.get(match.group(1))
+    def render_one(num: str) -> str:
+        source = raw_sources.get(num)
         if source is None:
-            return match.group(0)
+            return f"[{num}]"
         canonical = canonical_by_source.setdefault(source, len(canonical_by_source) + 1)
         # Every inline mention needs its own anchor id (duplicate ids are
         # invalid HTML and make the browser's back-navigation ambiguous), so
@@ -76,6 +81,12 @@ def render_footnotes(answer: str, message_id: int, language_code: str | None) ->
             f'<sup><a href="#sp-fn-{message_id}-{canonical}" '
             f'id="sp-ref-{message_id}-{canonical}-{occurrence}">[{canonical}]</a></sup>'
         )
+
+    def replace_marker(match: re.Match) -> str:
+        # A single "[1]" splits into one number, same as before; a malformed
+        # "[1, 2]" splits into several, each rendered as its own footnote
+        # link instead of being left as unlinked literal text.
+        return "".join(render_one(n.strip()) for n in match.group(1).split(","))
 
     linked_body = _INLINE_MARKER_RE.sub(replace_marker, body)
     if not canonical_by_source:
