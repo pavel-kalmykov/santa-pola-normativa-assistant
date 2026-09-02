@@ -1,21 +1,40 @@
 page_title = "Assistent de Normativa de Santa Pola"
-heading = "🏛️ Assistent de Normativa de Santa Pola"
+heading = ":material/account_balance: Assistent de Normativa de Santa Pola"
 caption = "Pregunta sobre ordenances municipals, ordenances fiscals, reglaments i bans de Santa Pola, en qualsevol idioma. Cada resposta cita el seu document d'origen."
 chat_placeholder = "Escriu una pregunta sobre la normativa municipal de Santa Pola..."
 suggestions_label = "Prova amb una d'aquestes preguntes:"
+new_chat_help = "Xat nou"
+no_chats_yet = "Encara no hi ha xats guardats"
+rename_help = "Canviar el nom"
+delete_help = "Eliminar"
+rename_label = "Nom nou"
+rename_confirm = "Guardar"
+rename_cancel = "Cancel·lar"
+confirm_delete = "Eliminar aquest xat?"
+delete_confirm_yes = "Eliminar"
+delete_confirm_cancel = "Cancel·lar"
 searching = "Cercant: \"{query}\""
 results_found = "{n} resultat(s) trobat(s)"
 no_results = "No s'han trobat resultats"
-feedback_up = "Gràcies per la teua valoració! 👍"
-feedback_down = "Gràcies per la teua valoració! 👎"
+feedback_up_help = "Bona resposta"
+feedback_down_help = "Mala resposta"
+copy_help = "Copiar resposta"
+regenerate_help = "Tornar a generar"
+copied_toast = "Copiat al porta-retalls"
+feedback_up = ":material/thumb_up: Gràcies per la teua valoració!"
+feedback_down = ":material/thumb_down: Gràcies per la teua valoració!"
 error = "Ho sentim, alguna cosa ha fallat en contactar amb l'assistent. Sol ser un problema de xarxa passatger, torna-ho a provar."
-about_title = "ℹ️ Sobre aquest assistent"
+search_degraded = "Ara mateix la cerca per paraules clau no està disponible; s'està usant només cerca semàntica, així que pot ser que falten alguns resultats."
+vector_search_degraded = "Ara mateix la cerca semàntica no està disponible; s'està usant només cerca per paraules clau, així que pot ser que falten alguns resultats."
+retrieval_unavailable = "Els cercadors s'estan reactivant (aquest projecte usa serveis al núvol gratuïts que es pausen quan no s'usen). Torna-ho a provar d'ací a un minut."
+llm_unavailable = "El proveïdor del model de llenguatge ha rebutjat la petició (possible problema de quota, clau o configuració del lloc). No és cosa que es solucione tornant-ho a provar; si persisteix, avisa el responsable del lloc."
+about_title = ":material/info: Sobre aquest assistent"
 about_body = """
 **Què és**: un assistent conversacional que respon preguntes sobre la normativa municipal de Santa Pola (ordenances, ordenances fiscals, reglaments i bans), en qualsevol idioma, citant sempre el document i la pàgina d'origen.
 
 **Com funciona**: indexa els documents PDF oficials publicats per l'Ajuntament i combina cerca semàntica i per paraules clau per trobar els fragments rellevants; un model de llenguatge redacta la resposta a partir d'ells, sense inventar informació que no siga als documents.
 
-**Stack tècnic**: ingesta amb dlt, PDFs a MinIO, cerca híbrida amb Qdrant i Elasticsearch, agent amb Pydantic AI sobre DeepSeek, interfície en Streamlit, observabilitat amb OpenTelemetry, Tempo i Grafana.
+**Stack tècnic**: ingesta amb dlt, PDFs a MinIO, cerca híbrida amb pgvector i OpenSearch, agent amb Pydantic AI sobre GLM (Z.ai), interfície en Streamlit, observabilitat amb OpenTelemetry, Tempo i Grafana.
 
 **Avís**: les respostes es generen automàticament a partir dels documents indexats i poden no reflectir la normativa més recent; per a tràmits oficials, confirma sempre amb l'Ajuntament de Santa Pola.
 """

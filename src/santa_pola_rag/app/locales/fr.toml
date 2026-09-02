@@ -1,21 +1,40 @@
 page_title = "Assistant Reglementation Santa Pola"
-heading = "🏛️ Assistant Réglementation Santa Pola"
+heading = ":material/account_balance: Assistant Réglementation Santa Pola"
 caption = "Posez vos questions sur les ordonnances municipales et fiscales, les règlements et les avis publics de Santa Pola, dans n'importe quelle langue. Chaque réponse cite sa source."
 chat_placeholder = "Posez une question sur la réglementation municipale de Santa Pola..."
 suggestions_label = "Essayez une de ces questions :"
+new_chat_help = "Nouvelle conversation"
+no_chats_yet = "Aucune conversation enregistrée pour le moment"
+rename_help = "Renommer"
+delete_help = "Supprimer"
+rename_label = "Nouveau nom"
+rename_confirm = "Enregistrer"
+rename_cancel = "Annuler"
+confirm_delete = "Supprimer cette conversation ?"
+delete_confirm_yes = "Supprimer"
+delete_confirm_cancel = "Annuler"
 searching = "Recherche : \"{query}\""
 results_found = "{n} résultat(s) trouvé(s)"
 no_results = "Aucun résultat trouvé"
-feedback_up = "Merci pour votre retour ! 👍"
-feedback_down = "Merci pour votre retour ! 👎"
+feedback_up_help = "Bonne réponse"
+feedback_down_help = "Mauvaise réponse"
+copy_help = "Copier la réponse"
+regenerate_help = "Régénérer"
+copied_toast = "Copié dans le presse-papiers"
+feedback_up = ":material/thumb_up: Merci pour votre retour !"
+feedback_down = ":material/thumb_down: Merci pour votre retour !"
 error = "Désolé, une erreur est survenue en contactant l'assistant. Il s'agit généralement d'un problème réseau temporaire, réessayez."
-about_title = "ℹ️ À propos de cet assistant"
+search_degraded = "La recherche par mots-clés n'est pas disponible pour le moment ; seule la recherche sémantique est utilisée, il est donc possible que certains résultats manquent."
+vector_search_degraded = "La recherche sémantique n'est pas disponible pour le moment ; seule la recherche par mots-clés est utilisée, il est donc possible que certains résultats manquent."
+retrieval_unavailable = "Les moteurs de recherche sont en train de redémarrer (ce projet utilise des services cloud gratuits qui se mettent en pause en cas d'inactivité). Réessayez dans une minute."
+llm_unavailable = "Le fournisseur du modèle de langage a rejeté la requête (probablement un problème de quota, de clé ou de configuration du site). Réessayer ne résoudra pas ce problème ; si cela persiste, prévenez le responsable du site."
+about_title = ":material/info: À propos de cet assistant"
 about_body = """
 **Ce que c'est** : un assistant conversationnel qui répond aux questions sur la réglementation municipale de Santa Pola (ordonnances, ordonnances fiscales, règlements et avis publics), dans n'importe quelle langue, en citant toujours le document et la page source.
 
 **Comment ça marche** : il indexe les documents PDF officiels publiés par la mairie et combine recherche sémantique et recherche par mots-clés pour trouver les passages pertinents ; un modèle de langage rédige la réponse à partir de ceux-ci, sans inventer d'information absente des documents.
 
-**Stack technique** : ingestion avec dlt, PDF stockés dans MinIO, recherche hybride avec Qdrant et Elasticsearch, agent Pydantic AI sur DeepSeek, interface Streamlit, observabilité avec OpenTelemetry, Tempo et Grafana.
+**Stack technique** : ingestion avec dlt, PDF stockés dans MinIO, recherche hybride avec pgvector et OpenSearch, agent Pydantic AI sur GLM (Z.ai), interface Streamlit, observabilité avec OpenTelemetry, Tempo et Grafana.
 
 **Avertissement** : les réponses sont générées automatiquement à partir des documents indexés et peuvent ne pas refléter la réglementation la plus récente ; pour toute démarche officielle, vérifiez toujours auprès de la mairie de Santa Pola.
 """

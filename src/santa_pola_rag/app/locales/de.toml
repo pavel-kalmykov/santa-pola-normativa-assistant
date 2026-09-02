@@ -1,21 +1,40 @@
 page_title = "Santa Pola Vorschriften-Assistent"
-heading = "🏛️ Santa Pola Vorschriften-Assistent"
+heading = ":material/account_balance: Santa Pola Vorschriften-Assistent"
 caption = "Fragen Sie in jeder Sprache nach den städtischen Verordnungen, Steuerordnungen, Satzungen und amtlichen Bekanntmachungen von Santa Pola. Jede Antwort verweist auf ihre Quelle."
 chat_placeholder = "Stellen Sie eine Frage zu den städtischen Vorschriften von Santa Pola..."
 suggestions_label = "Probieren Sie eine dieser Fragen:"
+new_chat_help = "Neuer Chat"
+no_chats_yet = "Noch keine gespeicherten Chats"
+rename_help = "Umbenennen"
+delete_help = "Löschen"
+rename_label = "Neuer Name"
+rename_confirm = "Speichern"
+rename_cancel = "Abbrechen"
+confirm_delete = "Diesen Chat löschen?"
+delete_confirm_yes = "Löschen"
+delete_confirm_cancel = "Abbrechen"
 searching = "Suche: \"{query}\""
 results_found = "{n} Ergebnis(se) gefunden"
 no_results = "Keine Ergebnisse gefunden"
-feedback_up = "Danke für Ihr Feedback! 👍"
-feedback_down = "Danke für Ihr Feedback! 👎"
+feedback_up_help = "Gute Antwort"
+feedback_down_help = "Schlechte Antwort"
+copy_help = "Antwort kopieren"
+regenerate_help = "Neu generieren"
+copied_toast = "In die Zwischenablage kopiert"
+feedback_up = ":material/thumb_up: Danke für Ihr Feedback!"
+feedback_down = ":material/thumb_down: Danke für Ihr Feedback!"
 error = "Entschuldigung, beim Erreichen des Assistenten ist ein Fehler aufgetreten. Meist ein vorübergehendes Netzwerkproblem, bitte versuchen Sie es erneut."
-about_title = "ℹ️ Über diesen Assistenten"
+search_degraded = "Die Stichwortsuche ist derzeit nicht verfügbar; es wird nur die semantische Suche verwendet, daher fehlen möglicherweise einige Ergebnisse."
+vector_search_degraded = "Die semantische Suche ist derzeit nicht verfügbar; es wird nur die Stichwortsuche verwendet, daher fehlen möglicherweise einige Ergebnisse."
+retrieval_unavailable = "Die Suchdienste starten gerade wieder (dieses Projekt nutzt kostenlose Cloud-Dienste, die bei Inaktivität pausieren). Bitte versuchen Sie es in einer Minute erneut."
+llm_unavailable = "Der Anbieter des Sprachmodells hat die Anfrage abgelehnt (wahrscheinlich ein Kontingent-, Schlüssel- oder Konfigurationsproblem der Website). Erneutes Versuchen wird das nicht beheben; wenn es weiterhin auftritt, informieren Sie den Website-Betreiber."
+about_title = ":material/info: Über diesen Assistenten"
 about_body = """
 **Was es ist**: ein Gesprächsassistent, der Fragen zu den städtischen Vorschriften von Santa Pola (Verordnungen, Steuerordnungen, Satzungen und amtlichen Bekanntmachungen) in jeder Sprache beantwortet und dabei stets das Quelldokument und die Seite angibt.
 
 **Wie es funktioniert**: er indiziert die offiziellen PDF-Dokumente des Rathauses und kombiniert semantische Suche mit Stichwortsuche, um die relevanten Passagen zu finden; ein Sprachmodell verfasst daraus die Antwort, ohne Informationen zu erfinden, die nicht in den Dokumenten stehen.
 
-**Technischer Stack**: Ingestion mit dlt, PDFs in MinIO, hybride Suche mit Qdrant und Elasticsearch, ein Pydantic-AI-Agent auf Basis von DeepSeek, eine Streamlit-Oberfläche, Observability mit OpenTelemetry, Tempo und Grafana.
+**Technischer Stack**: Ingestion mit dlt, PDFs in MinIO, hybride Suche mit pgvector und OpenSearch, ein Pydantic-AI-Agent auf Basis von GLM (Z.ai), eine Streamlit-Oberfläche, Observability mit OpenTelemetry, Tempo und Grafana.
 
 **Hinweis**: Antworten werden automatisch aus den indizierten Dokumenten generiert und spiegeln möglicherweise nicht die aktuellsten Vorschriften wider; für amtliche Vorgänge stets beim Rathaus von Santa Pola nachfragen.
 """

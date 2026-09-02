@@ -1,21 +1,40 @@
 page_title = "Santa Pola Regulations Assistant"
-heading = "🏛️ Santa Pola Regulations Assistant"
+heading = ":material/account_balance: Santa Pola Regulations Assistant"
 caption = "Ask about Santa Pola's municipal ordinances, tax ordinances, bylaws and public notices, in any language. Every answer cites its source document."
 chat_placeholder = "Ask a question about Santa Pola's municipal regulations..."
 suggestions_label = "Try one of these questions:"
+new_chat_help = "New chat"
+no_chats_yet = "No saved chats yet"
+rename_help = "Rename"
+delete_help = "Delete"
+rename_label = "New name"
+rename_confirm = "Save"
+rename_cancel = "Cancel"
+confirm_delete = "Delete this chat?"
+delete_confirm_yes = "Delete"
+delete_confirm_cancel = "Cancel"
 searching = "Searching: \"{query}\""
 results_found = "{n} result(s) found"
 no_results = "No results found"
-feedback_up = "Thanks for the feedback! 👍"
-feedback_down = "Thanks for the feedback! 👎"
+feedback_up_help = "Good answer"
+feedback_down_help = "Bad answer"
+copy_help = "Copy response"
+regenerate_help = "Regenerate"
+copied_toast = "Copied to clipboard"
+feedback_up = ":material/thumb_up: Thanks for the feedback!"
+feedback_down = ":material/thumb_down: Thanks for the feedback!"
 error = "Sorry, something went wrong reaching the assistant. This is usually a transient network issue, please try asking again."
-about_title = "ℹ️ About this assistant"
+search_degraded = "Keyword search isn't available right now; falling back to semantic search only, so some results may be missing."
+vector_search_degraded = "Semantic search isn't available right now; falling back to keyword search only, so some results may be missing."
+retrieval_unavailable = "The search backends are waking back up (this project runs on free-tier cloud services that pause when idle). Please try again in a minute."
+llm_unavailable = "The language model provider rejected the request (likely a quota, key or site configuration issue). Asking again won't fix this; if it persists, let the site owner know."
+about_title = ":material/info: About this assistant"
 about_body = """
 **What it is**: a conversational assistant that answers questions about Santa Pola's municipal regulations (ordinances, tax ordinances, bylaws and public notices), in any language, always citing the source document and page.
 
 **How it works**: it indexes the official PDF documents published by the town hall and combines semantic and keyword search to find the relevant passages; a language model drafts the answer from them, without inventing information that isn't in the documents.
 
-**Tech stack**: ingestion with dlt, PDFs stored in MinIO, hybrid search with Qdrant and Elasticsearch, a Pydantic AI agent on top of DeepSeek, a Streamlit interface, observability with OpenTelemetry, Tempo and Grafana.
+**Tech stack**: ingestion with dlt, PDFs stored in MinIO, hybrid search with pgvector and OpenSearch, a Pydantic AI agent on top of GLM (Z.ai), a Streamlit interface, observability with OpenTelemetry, Tempo and Grafana.
 
 **Disclaimer**: answers are generated automatically from the indexed documents and may not reflect the most recent regulations; for official procedures, always confirm with the Santa Pola town hall.
 """
