@@ -10,6 +10,7 @@ from pydantic_ai.messages import ModelMessagesTypeAdapter
 
 from santa_pola_rag.app.i18n import AVAILABLE_LANGUAGES, strings_for
 from santa_pola_rag.app.suggestions import suggested_questions
+from santa_pola_rag.config import settings
 from santa_pola_rag.language import detect_language
 from santa_pola_rag.observability import chat_store
 from santa_pola_rag.observability.feedback import (
@@ -19,7 +20,7 @@ from santa_pola_rag.observability.feedback import record_feedback
 from santa_pola_rag.observability.query_log import (
     ensure_index as ensure_query_log_index,
 )
-from santa_pola_rag.observability.query_log import record_query
+from santa_pola_rag.observability.query_log import queries_today, record_query
 from santa_pola_rag.observability.tracing import setup_tracing
 from santa_pola_rag.rag.agent import generate_title, stream_ask
 from santa_pola_rag.rag.citations import render_footnotes
@@ -498,7 +499,33 @@ regenerate_pending = st.session_state.pop("regenerate_pending", None)
 is_regenerate = regenerate_pending is not None
 question = regenerate_pending or st.chat_input(strings["chat_placeholder"]) or clicked_suggestion
 
+
+@st.cache_data(ttl=60)
+def _queries_today_cached() -> int | None:
+    # No proxy-level rate limiting exists on Streamlit Community Cloud, so
+    # the spend guard is these two app-side checks: a per-session cap from
+    # session_state and this global daily ceiling from the query log. The
+    # cache keeps the ceiling check from turning every question into an
+    # extra OpenSearch round trip.
+    return queries_today()
+
+
 if question:
+    asked = st.session_state.get("questions_asked", 0)
+    if asked >= settings.max_questions_per_session:
+        st.error(
+            strings["rate_limit_session"].format(
+                n=settings.max_questions_per_session
+            ),
+            icon=":material/block:",
+        )
+        st.stop()
+    today_count = _queries_today_cached()
+    if today_count is not None and today_count >= settings.daily_query_budget:
+        st.error(strings["rate_limit_daily"], icon=":material/block:")
+        st.stop()
+    st.session_state.questions_asked = asked + 1
+
     if not is_regenerate:
         st.session_state.display_messages.append({"role": "user", "content": question})
         with st.chat_message("user"):

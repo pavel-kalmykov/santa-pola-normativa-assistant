@@ -28,6 +28,8 @@ search_degraded = "Ara mateix la cerca per paraules clau no està disponible; s'
 vector_search_degraded = "Ara mateix la cerca semàntica no està disponible; s'està usant només cerca per paraules clau, així que pot ser que falten alguns resultats."
 retrieval_unavailable = "Els cercadors s'estan reactivant (aquest projecte usa serveis al núvol gratuïts que es pausen quan no s'usen). Torna-ho a provar d'ací a un minut."
 llm_unavailable = "El proveïdor del model de llenguatge ha rebutjat la petició (possible problema de quota, clau o configuració del lloc). No és cosa que es solucione tornant-ho a provar; si persisteix, avisa el responsable del lloc."
+rate_limit_session = "Has arribat al límit de {n} preguntes d'esta sessió. Refresca la pàgina per a començar una sessió nova."
+rate_limit_daily = "L'assistent ha esgotat hui el seu pressupost diari de preguntes, un límit per a protegir els crèdits del servei. Torna demà, si us plau."
 about_title = ":material/info: Sobre aquest assistent"
 about_body = """
 **Què és**: un assistent conversacional que respon preguntes sobre la normativa municipal de Santa Pola (ordenances, ordenances fiscals, reglaments i bans), en qualsevol idioma, citant sempre el document i la pàgina d'origen.

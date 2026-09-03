@@ -46,6 +46,14 @@ class Settings(BaseSettings):
     otel_exporter_otlp_headers: str | None = None
     otel_service_name: str = "santa-pola-rag"
 
+    # Visitor cost guards for the public deployment: no proxy-level rate
+    # limiting is possible on Streamlit Community Cloud, so the budget is
+    # enforced in app code. The session cap bounds one browser tab's
+    # session_state lifetime; the daily budget is the hard spend ceiling
+    # nobody can reset by clearing cookies.
+    max_questions_per_session: int = 20
+    daily_query_budget: int = 200
+
     @property
     def postgres_dsn(self) -> str:
         dsn = (

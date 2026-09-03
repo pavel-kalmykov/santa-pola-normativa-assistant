@@ -28,6 +28,8 @@ search_degraded = "Keyword search isn't available right now; falling back to sem
 vector_search_degraded = "Semantic search isn't available right now; falling back to keyword search only, so some results may be missing."
 retrieval_unavailable = "The search backends are waking back up (this project runs on free-tier cloud services that pause when idle). Please try again in a minute."
 llm_unavailable = "The language model provider rejected the request (likely a quota, key or site configuration issue). Asking again won't fix this; if it persists, let the site owner know."
+rate_limit_session = "You've reached this session's limit of {n} questions. Reload the page to start a new session."
+rate_limit_daily = "The assistant has used up its daily question budget, a limit that protects the service's credits. Please come back tomorrow."
 about_title = ":material/info: About this assistant"
 about_body = """
 **What it is**: a conversational assistant that answers questions about Santa Pola's municipal regulations (ordinances, tax ordinances, bylaws and public notices), in any language, always citing the source document and page.

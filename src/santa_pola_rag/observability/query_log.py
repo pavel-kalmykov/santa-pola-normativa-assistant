@@ -41,6 +41,25 @@ INDEX_MAPPING = {
 }
 
 
+def queries_today() -> int | None:
+    """Turns logged since 00:00 UTC today, for the app's daily budget
+    check. None when OpenSearch is unreachable so callers can fail open:
+    like the rest of this module, telemetry must not block chat."""
+    try:
+        client = get_client()
+        start_of_day = datetime.now(UTC).replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        response = client.count(
+            index=INDEX_NAME,
+            body={"query": {"range": {"created_at": {"gte": start_of_day.isoformat()}}}},
+        )
+        return response["count"]
+    except OpenSearchConnectionError:
+        logger.warning("OpenSearch unreachable, cannot count today's queries")
+        return None
+
+
 def ensure_index() -> None:
     # Query logging is observability, not core RAG: a managed OpenSearch
     # being unreachable (paused free tier) must not block the chat UI from

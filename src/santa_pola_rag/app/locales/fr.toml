@@ -28,6 +28,8 @@ search_degraded = "La recherche par mots-clés n'est pas disponible pour le mome
 vector_search_degraded = "La recherche sémantique n'est pas disponible pour le moment ; seule la recherche par mots-clés est utilisée, il est donc possible que certains résultats manquent."
 retrieval_unavailable = "Les moteurs de recherche sont en train de redémarrer (ce projet utilise des services cloud gratuits qui se mettent en pause en cas d'inactivité). Réessayez dans une minute."
 llm_unavailable = "Le fournisseur du modèle de langage a rejeté la requête (probablement un problème de quota, de clé ou de configuration du site). Réessayer ne résoudra pas ce problème ; si cela persiste, prévenez le responsable du site."
+rate_limit_session = "Vous avez atteint la limite de {n} questions de cette session. Rechargez la page pour commencer une nouvelle session."
+rate_limit_daily = "L'assistant a épuisé son budget quotidien de questions, une limite qui protège les crédits du service. Revenez demain, s'il vous plaît."
 about_title = ":material/info: À propos de cet assistant"
 about_body = """
 **Ce que c'est** : un assistant conversationnel qui répond aux questions sur la réglementation municipale de Santa Pola (ordonnances, ordonnances fiscales, règlements et avis publics), dans n'importe quelle langue, en citant toujours le document et la page source.

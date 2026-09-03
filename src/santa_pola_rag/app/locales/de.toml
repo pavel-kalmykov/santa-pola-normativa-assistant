@@ -28,6 +28,8 @@ search_degraded = "Die Stichwortsuche ist derzeit nicht verfügbar; es wird nur 
 vector_search_degraded = "Die semantische Suche ist derzeit nicht verfügbar; es wird nur die Stichwortsuche verwendet, daher fehlen möglicherweise einige Ergebnisse."
 retrieval_unavailable = "Die Suchdienste starten gerade wieder (dieses Projekt nutzt kostenlose Cloud-Dienste, die bei Inaktivität pausieren). Bitte versuchen Sie es in einer Minute erneut."
 llm_unavailable = "Der Anbieter des Sprachmodells hat die Anfrage abgelehnt (wahrscheinlich ein Kontingent-, Schlüssel- oder Konfigurationsproblem der Website). Erneutes Versuchen wird das nicht beheben; wenn es weiterhin auftritt, informieren Sie den Website-Betreiber."
+rate_limit_session = "Sie haben das Limit von {n} Fragen dieser Sitzung erreicht. Laden Sie die Seite neu, um eine neue Sitzung zu starten."
+rate_limit_daily = "Der Assistent hat sein tägliches Fragenbudget ausgeschöpft, ein Limit zum Schutz der Dienstguthaben. Bitte kommen Sie morgen wieder."
 about_title = ":material/info: Über diesen Assistenten"
 about_body = """
 **Was es ist**: ein Gesprächsassistent, der Fragen zu den städtischen Vorschriften von Santa Pola (Verordnungen, Steuerordnungen, Satzungen und amtlichen Bekanntmachungen) in jeder Sprache beantwortet und dabei stets das Quelldokument und die Seite angibt.
