@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    env:
+      # config.py reads these at import time; the tested code never calls
+      # the APIs, so placeholder values are enough.
+      LLM_API_KEY: test-key
+      OPENROUTER_API_KEY: test-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - run: uv python install 3.13
+
+      - run: uv sync --frozen
+
+      - run: uv run ruff check .
+
+      - run: uv run pytest
