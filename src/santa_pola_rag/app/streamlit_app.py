@@ -59,10 +59,15 @@ st.set_page_config(
     page_icon=":material/account_balance:",
 )
 
+logger.info("startup: script body reached")
 setup_tracing()
+logger.info("startup: tracing configured")
 ensure_feedback_index()
+logger.info("startup: feedback index ensured")
 ensure_query_log_index()
+logger.info("startup: query log index ensured")
 chat_store.ensure_table()
+logger.info("startup: chat table ensured")
 
 # A cookie survives closing the tab/browser, which st.session_state does
 # not; st.query_params is what actually makes that value visible to THIS
@@ -98,6 +103,7 @@ if "chat_created_at" not in st.session_state:
     st.session_state.chat_created_at = None
 
 strings = strings_for(_current_ui_language())
+logger.info("startup: strings loaded, browser_id=%s", browser_id)
 
 
 def _start_new_chat() -> None:
@@ -114,6 +120,7 @@ with st.sidebar:
     # there, not floating in the main content area, and it's where the list
     # of past chats for this browser lives too.
     past_chats = chat_store.list_chats(browser_id)
+    logger.info("startup: %d past chats listed", len(past_chats))
     if not past_chats:
         st.caption(strings["no_chats_yet"])
     else:
