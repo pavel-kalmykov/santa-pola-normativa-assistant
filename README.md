@@ -1,188 +1,172 @@
 # Santa Pola Municipal Ordinances Assistant
 
-This is a multilingual, conversational RAG assistant over the public municipal ordinances, tax ordinances, bylaws and public notices ("bandos") of Santa Pola, Spain, built as the capstone project for the [LLM Zoomcamp 2026](https://github.com/DataTalksClub/llm-zoomcamp) course.
+A multilingual, conversational RAG assistant over the public municipal ordinances, tax ordinances, bylaws and public notices ("bandos") of Santa Pola, Spain. Residents come from dozens of countries and the source documents are Spanish-only PDFs, many of them scanned: ask in your own language, get an answer grounded in and cited from the actual ordinance. Capstone project for the [LLM Zoomcamp 2026](https://github.com/DataTalksClub/llm-zoomcamp).
 
-Residents of Santa Pola come from dozens of countries, and the official source documents are only published in Spanish. This assistant lets anyone ask "How much is the dog census fee?" or "Quand puis-je installer une terrasse sur la voie publique ?" in their own language and get an answer grounded in, and cited from, the actual ordinance.
-
-**Live demo:** [santa-pola-normativa-assistant.streamlit.app](https://santa-pola-normativa-assistant.streamlit.app/), running on Streamlit Community Cloud against Neon (pgvector) and Aiven for OpenSearch. **Live monitoring:** [public Grafana dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c), backed by the same OpenSearch indices and by traces exported to Grafana Cloud Tempo.
+**Live demo:** [santa-pola-normativa-assistant.streamlit.app](https://santa-pola-normativa-assistant.streamlit.app/) · **Live monitoring:** [public Grafana dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c)
 
 <p align="center">
-  <img src="docs/screenshots/suggestions.png" alt="Empty chat showing clickable suggested questions, filtered to the active UI language" width="600">
-  <img src="docs/screenshots/chat.png" alt="Chat answering a question about who is liable for the household waste collection fee, with inline citations and sources" width="600">
-  <img src="docs/screenshots/grafana.png" alt="Grafana monitoring dashboard with query volume, latency, language distribution, citation rate and user feedback" width="600">
+  <img src="docs/screenshots/chat.png" alt="Chat answering a question with inline citations and sources" width="600">
 </p>
 
-## Problem
+## Results
 
-Santa Pola's town hall publishes ~1,470 PDFs across 22 sections of [santapola.es/ayuntamiento](https://santapola.es/ayuntamiento/). Finding the right fee, deadline or rule means knowing which of dozens of PDFs to open, in Spanish, often in a scanned/non-searchable format. This project builds a real ingestion pipeline over four "hard regulation" categories (269 PDFs), the ones residents and small businesses actually need to cite, and a conversational assistant that always answers with a source citation (document, page, URL), never from memory alone.
+30 gold questions (mixed Spanish/English/French/German/Valencian), evaluated against the full 9,904-chunk corpus:
 
-## Dataset
-
-Scraped live from santapola.es, not the course FAQ:
-
-| Category | Slug | PDFs |
+| Retrieval @ k=5 | Hit rate | MRR |
 |---|---|---|
-| Ordenanzas Fiscales (tax ordinances) | `ordenanzas-fiscales` | 182 |
-| Reglamentos y otras Ordenanzas (bylaws) | `reglamentos-otras-ordenanzas` | 54 |
-| Bandos (public notices) | `bandos` | 23 |
-| Normativas (regulations) | `normativas` | 10 |
-| **Total** | | **269** |
+| Vector only (pgvector) | 30.0% | 0.171 |
+| Text only (OpenSearch BM25) | 40.0% | 0.247 |
+| Hybrid (RRF), no reranking | 36.7% | 0.236 |
+| **Hybrid + cross-encoder reranking (deployed)** | **60.0%** | **0.457** |
 
-269 PDFs produce 2,815 pages (242 of them scanned/image-only and OCR'd) and 9,904 indexed chunks. The category list (`santa_pola_rag/ingestion/scraper.py`) is a plain dict of slug to name, so extending to any of the other 18 sections on the town hall's site is a one-line change. Both the PDF and page count drift slightly over time since the site is scraped live, not from a frozen dataset.
+Answer quality (LLM-as-judge, different provider than the chat model to avoid self-preference): **29/30 passed**, the one "failure" being a correct out-of-scope refusal. Raw outputs in `eval/`.
 
 ## Architecture
 
 ```mermaid
 flowchart TD
-    A[santapola.es] -->|scrape + download| B[("MinIO<br/>raw PDF bytes")]
+    A[santapola.es] -->|scrape + download| B[("MinIO / R2<br/>raw PDF bytes")]
     B --> C[Docling text + table extraction]
     C -->|text layer usable| F
     C -->|scanned or garbled| D["Vision OCR<br/>Gemini 2.5 Flash"]
     D --> F[dlt pipeline<br/>idempotent, merge writes]
-    F --> G[("Postgres<br/>staging, vectors,<br/>chat history")]
+    F --> G[("Postgres / Neon<br/>staging, vectors,<br/>chat history")]
     G --> H[Chunking]
     H --> I[Multilingual embeddings]
-    I --> J[("pgvector<br/>vectors, same Postgres as staging")]
+    I --> J[("pgvector")]
     I --> K[("OpenSearch<br/>BM25 chunks")]
     J --> L["Hybrid search<br/>RRF fusion + cross-encoder reranking"]
     K --> L
     L --> M["Pydantic AI agent + GLM (Z.ai)<br/>tool-calling, cites sources"]
     M --> N[Streamlit chat UI]
     M --> O["OpenTelemetry traces"]
-    O --> P[("Tempo")]
+    O --> P[("Tempo / Grafana Cloud")]
     N --> Q[("OpenSearch<br/>query + feedback logs")]
     N --> G
     P --> R[Grafana dashboard]
     Q --> R
 ```
 
-Tempo is Grafana's own trace storage backend: every agent run is exported to it via OpenTelemetry, and Grafana queries it to show the full request waterfall (agent, LLM calls, tool execution, hybrid search).
+The agent never answers from memory: it rewrites each question into Spanish `search_ordinances` tool calls (the indexed documents are Spanish), retrieves via the hybrid path above, and every claim carries a `[n]` citation rendered as bidirectional footnotes with the document, page and URL.
 
-## Why these choices
-
-- Ingestion runs as a real, automated pipeline. `dlt` resources and transformers scrape the listing pages, download PDFs, extract text, and fall back to vision OCR page by page. Every run commits one category at a time to Postgres, so a late failure never loses already-completed (and already-paid) work, and pages already staged are skipped on re-runs unless `--force` is passed: OCR is a paid call, so losing the PDF cache should never mean silently re-paying for it.
-- PDFs are content-addressed objects in MinIO. `boto3` writes and reads them against a local S3-compatible bucket; `extract.py` reads bytes straight from memory (Docling's `DocumentStream` over a `BytesIO`) with no temp files. Any machine pointed at the same MinIO instance sees the same PDFs.
-- Text extraction is table-aware, not just character-aware. `PyMuPDF`'s plain `page.get_text("text")` reads a page in raw left-to-right, top-to-bottom order, so a tariff table's category labels and its euro amounts end up on opposite sides of the page in the extracted text, sometimes separated by hundreds of characters. `docling` parses the page layout and exports a real Markdown table instead, keeping each label on the same row as its actual figure. This was a real, measured fix, not a hypothetical one: see "Evaluation > Retrieval" below.
-- Scanned pages and technical diagrams go through vision OCR. They're rendered to an image and sent to `google/gemini-2.5-flash` via OpenRouter, with the document's title and category injected into the prompt for context. Testing against a real evacuation diagram found it accurate but still occasionally wrong on fine print, which is exactly why every answer must cite its source page.
-- Embeddings are multilingual. `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` gives ~0.85 cosine similarity between semantically equivalent Spanish/English/French sentences at design time, and in production an English question about "Saint John's night" correctly retrieves the Spanish "Noche de San Juan" bando as the top hit.
-- Retrieval combines vector search, keyword search and reranking. pgvector (HNSW) and OpenSearch (BM25, Spanish analyzer) are queried in parallel and fused with Reciprocal Rank Fusion, then the fused candidates are rescored by a multilingual cross-encoder (`cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`, `search/reranker.py`) that reads the actual query and passage text jointly instead of only combining two rank positions. Measured impact is in "Evaluation > Retrieval" below.
-- Vectors live in the same Postgres as the ingestion staging tables, not a separate vector database. pgvector was benchmarked against Qdrant (identical hit rate/MRR, see "Evaluation > Retrieval") and against OpenSearch's own k-NN plugin (which lost that comparison), so it won on merit, not just convenience; reusing the already-required Postgres instance also means one less managed service to keep alive in the cloud deployment below.
-- OpenSearch, not Elasticsearch, for BM25. Elastic Cloud's only free option is a 14-day trial that deletes the whole deployment afterward (hit this for real: the trial's hostname stopped resolving entirely once it expired). OpenSearch's BM25 benchmarked identically to Elasticsearch's on this corpus, and Aiven's OpenSearch free tier never expires, it just pauses after inactivity and resumes on request.
-- Retrieval degrades instead of crashing. A managed backend that's paused or slow to wake shouldn't take the whole chat down: `search/hybrid.py` retries both channels with backoff, falls back to vector-only if OpenSearch stays unreachable (with a translated, visible notice, not a silent quality drop), and only surfaces a specific, translated, actionable error (not a raw traceback) if pgvector itself is still unreachable after retrying. Each search channel is also deliberately self-sufficient: both Postgres and OpenSearch hold the chunk text, so whichever engine is down leaves the other one able to search, rerank and cite on its own (a text-only-in-Postgres layout would have made an OpenSearch outage take the semantic channel down with it). A `connect_timeout` on the DSN bounds each attempt at 5 seconds, after measuring a ~4.5-minute worst case against a host that swallows packets instead of refusing them.
-- User state and search indexes live in different kinds of stores, on purpose. Conversation history (per browser, via a cookie; auto-titled by the model from the first question-answer pair, renamable and deletable) is irreplaceable user state, so it goes to Postgres, the store that never loses data even when its compute is asleep. Query logs and feedback are droppable telemetry, so they go to the search engine, where the Grafana dashboards already read and where losing a few records during an outage is acceptable. Each store's failure semantics match the value of what it holds.
-- The agent rewrites the user's question into its own search queries. The system prompt requires `search_ordinances` queries to be phrased in Spanish regardless of what language the user asked in, and lets the agent issue several purpose-built queries per question (for example, "¿Cuánto cuesta la licencia de apertura de una peluquería?" becomes queries like `licencia apertura peluquería tasa precio` and `tasa licencia apertura establecimientos actividades`) rather than a single verbatim lookup against the index.
-- OpenSearch handles keyword search. It serves concurrent reads and writes for a real multi-user app, with the built-in Spanish analyzer stemming ordinance text for better BM25 recall.
-- Pydantic AI drives the agent. Typed tool calling, structured judge output and native OpenTelemetry instrumentation come with comparatively little boilerplate.
-- Every agent run is traced end-to-end, from the agent through LLM calls, tool execution and hybrid search, exported via OTLP to Tempo. Every question, answer and feedback vote is also indexed into its own OpenSearch index (`santa_pola_queries`/`santa_pola_feedback`, separate from the chunk index) with latency, detected language and citation presence, feeding the Grafana dashboard. This keeps each service to one clear job: Postgres stages ingestion text and holds the pgvector store, OpenSearch handles search and logs, MinIO holds raw files.
-- Every claim is cited. The agent cites with a numbered inline marker (`[1]`) and lists each distinct source once at the end in a fixed `[n] <title>, p. <page>, <url>` format; `rag/citations.py` turns that into deduplicated, bidirectionally-linked footnotes, recomputing numbers from the actual (title, page, url) rather than trusting the model's own numbering, since testing vision OCR against a real technical diagram found a genuine transcription error (120 vs 140 people in an evacuation sector) that makes an uncited hallucination risk unacceptable for a municipal-services assistant.
-- The interface is multilingual independently of the conversation. The chat answers in whatever language a question is asked in, detected with `lingua-language-detector`, since `langdetect` proved empirically non-deterministic and consistently wrong on some real short questions from this app. The UI chrome (title, placeholders, buttons) is a separate choice, picked from a compact popover selector and stored per-language in `app/locales/*.toml`, since Streamlit has no built-in i18n API of its own.
-- A hard cap limits searches per question, enforced in code. The agent gets a fixed budget of `search_ordinances` calls (`MAX_SEARCHES_PER_TURN` in `rag/agent.py`); once exhausted, the tool returns a message telling it to answer with what it already has instead of one more real pgvector+OpenSearch round trip. A prompt asking the model to "search efficiently" is a request, not a guarantee, so the limit is a boundary check on the tool call itself.
-
-## Real issues found and fixed during ingestion
-
-Running the full 268-PDF ingestion surfaced three real bugs no amount of code review would have caught:
-
-- Extraction concurrency deadlocked deterministically. dlt's default 5-way extraction concurrency reliably stalled (near-zero CPU, no progress) whenever two large scanned PDFs were OCR'd at the same time, always at the same page across repeated runs, even though the same page OCR'd in isolation succeeded in 4 seconds. The root cause isn't fully isolated (likely an OpenRouter-side or connection-pool concurrency limit rather than a client bug); pinning `EXTRACT__WORKERS=1` so OCR calls never overlap avoids shipping a pipeline that can silently hang for hours on paid API calls.
-- One scanned page triggered unbounded degenerate generation. `google/gemini-2.5-flash` fell into a repetition loop that generated over 1,000,000 characters in a single response, the actual cause of what first looked like the same "hang." `max_tokens=2048` on the OCR call plus a defense-in-depth truncation (`MAX_DESCRIPTION_CHARS`) logs a warning and caps the stored text if a response still comes back abnormally long.
-- Some PDFs' text layer was silently corrupted. They embed subset fonts with a broken ToUnicode map, so PyMuPDF "extracts" text that is 60%+ control characters, not real content. A control-character-ratio check (`ingestion/extract.py`) routes those pages to OCR instead of indexing garbage.
-
-## Running it
-
-**Prerequisites:** Docker and Docker Compose. A chat LLM API key (Z.ai's coding plan by default; DeepSeek, OpenRouter or any OpenAI-Chat-Completions-compatible provider work by changing `LLM_BASE_URL`/`LLM_MODEL`, no code change) and an OpenRouter API key (vision OCR for scanned pages).
+## Run it
 
 ```bash
 cp .env.example .env   # fill in LLM_API_KEY and OPENROUTER_API_KEY
 docker compose up -d
 ```
 
-That single command brings up every dependency (Postgres, OpenSearch, MinIO, Tempo, Grafana), runs the full ingestion and indexing pipeline once, and then starts the Streamlit app on `:8501`. The first run scrapes and OCRs real documents, so it takes a while and makes real OpenRouter API calls; watch its progress with:
+That brings up every dependency (Postgres with pgvector, OpenSearch, MinIO, Tempo, Grafana), runs the full ingestion and indexing pipeline once, and starts the app on `:8501`. The first run scrapes and OCRs real documents, so it takes a while; `docker compose logs -f ingest` follows it. Re-runs skip already-staged work; `--force` and `--categories` are available.
 
-```bash
-docker compose logs -f ingest
-```
+Grafana: http://localhost:3000/d/santa-pola-rag · MinIO console: http://localhost:9001.
 
-The pipeline is idempotent, so re-running `docker compose up -d` later does not repeat completed work. To force a full re-download/re-OCR, or to limit a run to specific categories, override the ingest service's command directly:
+### Cloud
 
-```bash
-docker compose run --rm ingest uv run python -m santa_pola_rag.ingestion.pipeline --force
-docker compose run --rm ingest uv run python -m santa_pola_rag.ingestion.pipeline --categories bandos,normativas
-```
+The live demo runs the same code with every backend swapped for a genuinely-free-tier managed service (a lesson learned the hard way: Elastic Cloud's trial deleted the original deployment after 14 days): [Neon](https://neon.tech/) Postgres+pgvector, [Aiven](https://aiven.io/opensearch) OpenSearch, the app on [Streamlit Community Cloud](https://streamlit.io/cloud), traces to Grafana Cloud, PDFs on [Cloudflare R2](https://developers.cloudflare.com/r2/), and a GitHub Actions workflow for re-ingestion. Aiven's free tier pauses after 24h idle (one "Power on" click in its console brings it back; the app degrades gracefully in the meantime).
 
-For local iteration on the app's own code without rebuilding the image each time, `uv sync` followed by `uv run streamlit run src/santa_pola_rag/app/streamlit_app.py` runs it directly on the host against the same docker-compose dependencies.
+## Design decisions, in short
 
-Grafana dashboard: http://localhost:3000/d/santa-pola-rag (anonymous access enabled for local use). MinIO console: http://localhost:9001.
+- **Hybrid retrieval + reranking**, chosen on measured merit: BM25 beats embeddings alone on this boilerplate-heavy corpus, and a multilingual cross-encoder over the RRF fusion doubles either channel alone.
+- **pgvector on the same Postgres as ingestion**, benchmarked against Qdrant (identical metrics) and against OpenSearch's own k-NN (which lost); one managed service less to keep alive.
+- **Each search channel is self-sufficient**: both stores hold the chunk text, so whichever engine is down leaves the other able to search, rerank and cite, with a visible translated notice instead of a silent quality drop.
+- **User state and telemetry live apart**: conversation history is Postgres state (survives an OpenSearch outage); query logs and feedback are droppable OpenSearch telemetry feeding Grafana.
+- **Ingestion is a real dlt pipeline**: per-category commits, table-aware extraction, page-by-page vision OCR for scanned pages, and a paid-call budget that never silently repeats OCR work.
+- **Citations are enforced in code**: the renderer recomputes footnote numbers from the actual (title, page, url) instead of trusting the model, and strips stray HTML.
+- **Costs are bounded in code**: a per-question search budget, plus per-session and site-wide daily question caps on the public deployment.
 
-### Cloud deployment
+<details>
+<summary><strong>Deep dive: the full rationale for each choice</strong></summary>
 
-The live demo above runs the same codebase with every backend swapped for a managed equivalent, chosen specifically for a genuinely perpetual free tier rather than a trial (a lesson learned the hard way: Elastic Cloud's trial-only free option deleted the original deployment after 14 days):
+- Ingestion commits one category at a time to Postgres, so a late failure never loses already-completed (and already-paid) work; pages already staged are skipped on re-runs unless `--force`, because OCR is a paid call.
+- PDFs are content-addressed objects in MinIO/R2; `extract.py` reads bytes straight from memory (Docling's `DocumentStream` over a `BytesIO`) with no temp files.
+- Text extraction is table-aware, not character-aware: PyMuPDF's linear `get_text()` scatters a tariff table's labels and euro amounts across the page, while Docling exports real Markdown tables keeping each row together. This was a measured fix (see Evaluation).
+- Scanned pages and diagrams go to `google/gemini-2.5-flash` via OpenRouter with document title/category injected for context; accuracy was checked against a real evacuation diagram, which is exactly why every answer must cite its source page.
+- Embeddings are `paraphrase-multilingual-MiniLM-L12-v2` (~0.85 cosine between equivalent Spanish/English/French sentences; an English "Saint John's night" question retrieves the Spanish "Noche de San Juan" bando as top hit).
+- Reranking uses `cross-encoder/mmarco-mMiniLMv2-L12-H384-v1`, scoring query and passage jointly instead of only fusing rank positions.
+- The agent's Spanish query rewriting is why raw retrieval numbers understate real quality: a standalone `hybrid_search(question)` misses cross-lingual questions the agent answers correctly (see Answer quality below).
+- `MAX_SEARCHES_PER_TURN` bounds the agent's search budget in code; a prompt asking to "search efficiently" is a request, not a guarantee.
+- OpenSearch handles keyword search with its built-in Spanish analyzer, serving concurrent reads and writes for a real multi-user app.
+- Pydantic AI drives the agent (typed tools, structured judge output, native OpenTelemetry) and every run is traced end-to-end to Tempo via OTLP.
+- The UI is multilingual independently of the conversation: question language detection with `lingua-language-detector` (chosen after `langdetect` proved non-deterministic on real short questions), UI chrome from `app/locales/*.toml` since Streamlit has no built-in i18n.
 
-- [Neon](https://neon.tech/) (serverless Postgres, with the `pgvector` extension enabled) covers both ingestion staging and the vector store, no separate vector database account needed. Compute auto-suspends when idle and resumes on the next query, with no data-loss risk.
-- [Aiven for OpenSearch](https://aiven.io/opensearch) for BM25 search and the query/feedback logs, reindexed from the same staged text with no re-scraping or re-OCR needed. Its free tier auto-powers-off after 24h of inactivity (never deleted, just paused); unlike Neon, an app connection does not wake it, so resuming means one "Power on" click in the Aiven console. While it is paused, the app stays usable in its degraded semantic-only mode (see "Why these choices" above), and conversations keep saving normally, since chat state lives in Postgres rather than in OpenSearch. `config.py` accepts an optional `OPENSEARCH_API_KEY` (Aiven's password) plus `OPENSEARCH_USER` (its basic-auth username, `avnadmin`) for exactly this managed case; against a local, unauthenticated OpenSearch container, both stay unset.
-- The Streamlit app itself deploys straight from this GitHub repo on [Streamlit Community Cloud](https://streamlit.io/cloud), which reads dependencies from `uv.lock` natively. Docling (and the torch/transformers/opencv stack that comes with it) lives in an `ingestion` extra rather than the base dependencies for exactly this: the app never imports it, and Streamlit Cloud's plain `uv sync` skips extras by default, so the deployed app doesn't carry that whole dependency tree just to serve chat.
-- Traces go to Grafana Cloud's Tempo over the same OTLP exporter, authenticated with an `OTEL_EXPORTER_OTLP_HEADERS` value in the standard `key=value` format (e.g. `Authorization=Basic <base64(instanceID:apiToken)>`); against the local, unauthenticated Tempo in `docker-compose.yml`, it stays unset.
-- [Cloudflare R2](https://developers.cloudflare.com/r2/) (S3-compatible storage) replaces the local MinIO for a fully cloud-native ingestion path, runnable from GitHub Actions instead of `docker-compose.yml`: see `.github/workflows/ingest.yml`. `config.py`'s `postgres_sslmode` (Neon requires `require`) and `minio_region` (R2 requires `auto`) exist for this.
+</details>
 
-## Evaluation
+<details>
+<summary><strong>Three real bugs the 269-PDF ingestion surfaced</strong></summary>
 
-### Retrieval
+- **Extraction concurrency deadlocked deterministically**: dlt's default 5-way extraction stalled (near-zero CPU) whenever two large scanned PDFs OCR'd concurrently, always at the same page, while the same page OCR'd in isolation took 4 seconds. Root cause not fully isolated (likely an OpenRouter-side or connection-pool limit); `EXTRACT__WORKERS=1` ships instead of a pipeline that can silently hang for hours on paid calls.
+- **One scanned page triggered unbounded degenerate generation**: Gemini 2.5 Flash fell into a repetition loop generating 1,000,000+ characters, the real cause of what first looked like a hang. `max_tokens=2048` plus a defensive truncation cap the stored text.
+- **Some PDFs' text layer was silently corrupted**: subset fonts with a broken ToUnicode map make PyMuPDF "extract" text that is 60%+ control characters; a control-character-ratio check routes those pages to OCR instead of indexing garbage.
 
-30 ground-truth questions generated by an LLM from randomly sampled chunks (mixed Spanish/English/French/German/Valencian, matching the assistant's real user base), evaluated at k=5 against the full 9,904-chunk corpus:
+</details>
 
-| Strategy | Hit rate | MRR |
-|---|---|---|
-| Vector only (pgvector) | 30.0% | 0.171 |
-| Text only (OpenSearch BM25) | 40.0% | 0.247 |
-| Hybrid (RRF), no reranking | 36.7% | 0.236 |
-| **Hybrid (RRF) + cross-encoder reranking** | **60.0%** | **0.457** |
+## Evaluation, in depth
 
-BM25 still outperforms embeddings alone on this corpus: hundreds of tax ordinances share near-identical boilerplate paragraphs (a chunk about "TASA POR X" is semantically close to dozens of other "TASA POR Y" chunks), which confuses a general-purpose multilingual encoder more than it confuses exact-term lexical matching. Plain RRF fusion still lands *below* BM25 alone (36.7% vs 40.0%) rather than between the two, for the same reason: a chunk that merely appears in the vector channel's noisy top-50 can outrank a chunk BM25 ranked highly but the vector channel missed entirely. Reranking the top 20 RRF-fused candidates with a multilingual cross-encoder fixes this, since it scores the actual query against the actual candidate text jointly instead of only combining two rank positions, and roughly doubles the hit rate over either channel alone. This configuration is kept as the default because it is also the only one with a real retrieval path for non-Spanish questions (an English question about "Saint John's night" only succeeds through the vector channel; BM25 alone returns nothing relevant for it), which this 30-question aggregate, dominated by same-language matches, doesn't fully capture.
+<details>
+<summary><strong>Retrieval: why hybrid + reranking, and what moved the numbers</strong></summary>
 
-Two extraction/chunking fixes drove the jump from an earlier 30.0%/0.186 baseline to the numbers above, both traced to the same real user question ("how much will I pay to get my towed car back") going unanswered:
+Hundreds of tax ordinances share near-identical boilerplate ("TASA POR X" is semantically close to dozens of "TASA POR Y" chunks), which confuses a general-purpose multilingual encoder more than exact-term BM25; that is why text-only outperforms vector-only. Plain RRF still lands below BM25 alone (36.7% vs 40.0%): a chunk that merely appears in the vector channel's noisy top-50 can outrank a chunk BM25 ranked highly but the vector channel missed. A multilingual cross-encoder rescoring the fused candidates fixes this and roughly doubles the hit rate. Hybrid is kept as default also because it is the only configuration with a real retrieval path for non-Spanish questions, which this aggregate doesn't fully capture.
 
-1. Chunk size was widened from 800 to 1,200 characters (overlap from 150 to 200): the vehicle-impound ordinance's tariff table was splitting with the category labels in one chunk and the euro amounts in the next, and the amounts-only chunk carried so little lexical or semantic signal on its own that neither search channel ever surfaced it, not even in the top 50 raw candidates before fusion or reranking.
-2. PDF text extraction moved from `PyMuPDF`'s plain `page.get_text("text")` to `docling`, which parses table layout into real Markdown tables instead of a left-to-right character stream. Even with the wider chunk size, a table's labels and figures could still land far apart in a flat text stream; keeping each row intact fixed that at the source and raised every metric above again, including vector-only hit rate (16.7% with the chunk-size fix alone, 30.0% with both fixes), since a properly laid-out table also gives the multilingual encoder a cleaner unit of meaning to embed.
+Two extraction fixes drove the jump from an earlier 30.0%/0.186 baseline, both traced to a real user question ("how much will I pay to get my towed car back") going unanswered:
 
-These are real, un-cherry-picked evaluation results, not target numbers; `eval/retrieval_results.json` has the raw output. Regenerate with `uv run python scripts/generate_ground_truth.py && uv run python scripts/evaluate_retrieval.py`.
+1. Chunk size widened from 800 to 1,200 characters (overlap 150→200): the vehicle-impound tariff table was splitting labels from amounts, and the amounts-only chunk carried too little signal to surface even in the top-50 raw candidates.
+2. PDF extraction moved from PyMuPDF's linear text to Docling's table-aware Markdown: even with wider chunks, a flat text stream separated each row's label from its figure; fixing it at the source raised every metric again (vector-only went 16.7% → 30.0%).
 
-### Answer quality (LLM-as-judge)
+These are real, un-cherry-picked results, not target numbers; `eval/retrieval_results.json` has the raw output. Regenerate with `uv run python scripts/generate_ground_truth.py && uv run python scripts/evaluate_retrieval.py`.
 
-`google/gemini-2.5-flash` (a different model and provider than the answer-generating chat model, `glm-4.6` by default, to avoid self-preference bias) scores each answer on relevance, faithfulness, and citation presence against the context the agent actually retrieved, reasoning step by step before a pass/fail verdict (`evaluation/llm_judge.py`). On the full 30-question ground truth, against the current pipeline: **29/30 passed**. Full transcript in `eval/rag_judge_results.json`; regenerate with `uv run python scripts/evaluate_rag.py`.
+</details>
 
-The one "failure" is the agent correctly declining an out-of-scope question (an EU regulation, not a Santa Pola ordinance) rather than a real quality gap; the judge scores a scope refusal as not relevant/cited, which is the expected shape for a correct refusal, not evidence of a bug (the same refusal behavior is exercised deliberately in "Prompt hardening" below). This score is also considerably higher than raw retrieval hit rate (60.0% at k=5) would suggest, and for a real reason, not an evaluation quirk: the agent always phrases its own `search_ordinances` queries in Spanish regardless of the question's language, so the multilingual questions that a standalone `hybrid_search(question)` call misses are frequently still answered correctly once the agent's own Spanish query rewriting is in the loop. An earlier version of this evaluation built the judge's context from a fresh `hybrid_search(item.question)` call instead of the context the agent's tool calls actually returned, which reproduced that same cross-lingual miss inside the judge itself and understated the score (8/10 on the first 10 questions) for that reason rather than a real answer-quality problem.
+<details>
+<summary><strong>Answer quality (LLM-as-judge): 29/30, and why that beats the 60% hit rate</strong></summary>
 
-### Output format compliance (prompt and temperature comparison)
+`google/gemini-2.5-flash` (a different provider than the chat model, `glm-4.6` by default, to avoid self-preference bias) scores each answer on relevance, faithfulness and citation presence against the context the agent actually retrieved, reasoning step by step before a pass/fail verdict (`evaluation/llm_judge.py`). Full transcript in `eval/rag_judge_results.json`; regenerate with `uv run python scripts/evaluate_rag.py`.
 
-A second, separate quality dimension is whether the model follows the output-format rules in the system prompt (the exact citation-list layout, going straight to the final answer with no draft recap) regardless of whether the answer's *content* is correct. Two concrete failure patterns were reproduced and measured on the same real question, run 6 times per configuration:
+The one "failure" is the agent correctly declining an out-of-scope question (an EU regulation, not a Santa Pola ordinance); the judge scores a scope refusal as not relevant/cited, the expected shape for a correct refusal. The score sits far above raw retrieval hit rate (60.0% @k=5) for a real reason: the agent always phrases its own search queries in Spanish, so cross-lingual questions that a standalone `hybrid_search(question)` misses are frequently answered correctly once the agent's rewriting is in the loop. An earlier judge version built its context from a fresh `hybrid_search(item.question)` call instead, reproduced that cross-lingual miss inside the judge itself, and understated the score (8/10) for that reason rather than a real quality gap.
 
-| Configuration | HTML wrapping (bug) | Duplicated recap paragraph (bug) |
+</details>
+
+<details>
+<summary><strong>Output format compliance: prompt + temperature, measured</strong></summary>
+
+Whether the model follows the system prompt's output rules (exact citation-list layout, no draft recap) is a separate dimension from content correctness. Two concrete failure patterns, reproduced and measured on the same real question, 6 runs per configuration:
+
+| Configuration | HTML wrapping (bug) | Duplicated recap (bug) |
 |---|---|---|
 | Default temperature, no examples | ~1 in 6-7 | ~2-3 in 6 |
 | Temperature 0.3 + one positive example | 0 in 6 | 1 in 6 |
 | + one explicit negative (wrong-vs-right) example | 0 in 6 | 0 in 6 |
 
-The best configuration (lower temperature, positive and negative few-shot examples) is what's deployed in `rag/agent.py`. It reduces the failure rate rather than guaranteeing it away, since LLM instruction-following is probabilistic: as defense in depth, `rag/citations.py` also strips any HTML the model still adds, and recomputes citation numbers from the actual (title, page, url) rather than trusting the model's own numbering.
+The deployed configuration reduces the failure rate rather than guaranteeing it away, since LLM instruction-following is probabilistic; as defense in depth, `rag/citations.py` also strips any HTML the model still adds and recomputes citation numbers from the actual (title, page, url).
 
-## Monitoring
+</details>
 
-The Grafana dashboard (`monitoring/grafana/dashboards/santa_pola_rag.json`) reads live from OpenSearch and Tempo:
+<details>
+<summary><strong>Prompt hardening</strong></summary>
 
-1. Query volume over time
-2. Answer latency, total (avg / p95)
-3. Question language distribution
-4. Citation rate
-5. User feedback (👍/👎)
-6. Retrieval (search) time (avg / p95): how much of the total latency is spent in `hybrid_search`
-7. LLM generation time (avg / p95): the remainder, covering narration, tool-call construction and the final answer
+The system prompt restricts the agent to Santa Pola's ordinances, treats user messages and search results as data rather than instructions, and refuses to reveal itself even when asked to translate, roleplay past, or "hypothetically" bypass the rule. It held up against 12 adversarial prompts across two rounds (direct override, system-prompt extraction, DAN-style roleplay, off-topic requests, fabricate-a-citation, drop-the-citation-requirement, and softened or nested variants), including one case where the agent ignored an explicit "skip the citation for this one" request and cited anyway. Evidence from one test pass with a fixed set, not a security guarantee: indirect injection via the indexed documents themselves hasn't been tested, since all indexed content comes from the town hall's own site rather than user-supplied documents.
 
-Every agent run is also traced end-to-end (agent, LLM calls, tool execution, hybrid search, pgvector/OpenSearch) via OpenTelemetry to Tempo, browsable from the same Grafana instance. The [public dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c) is the same layout reading from Aiven's OpenSearch instead, fed by the live demo above.
+</details>
 
-## Prompt hardening
+<details>
+<summary><strong>Monitoring</strong></summary>
 
-The system prompt restricts the agent to Santa Pola's ordinances, tells it to treat both user messages and search_ordinances results as data rather than instructions, and refuses to reveal itself even when asked to translate, roleplay past, or "hypothetically" bypass the rule. It held up against 12 adversarial prompts across two rounds (direct override, system-prompt extraction, DAN-style roleplay, off-topic requests, fabricate-a-citation, drop-the-citation-requirement, and softened or nested variants of each), including one case where the agent ignored an explicit "skip the citation for this one" request and cited its source anyway. This is evidence from one test pass with a fixed set of prompts, not a security guarantee: LLM instruction-following stays probabilistic, and indirect injection via the indexed documents themselves, as opposed to the user's message, hasn't been tested, since all indexed content currently comes from the town hall's own site rather than user-supplied documents.
+The Grafana dashboard (`monitoring/grafana/dashboards/santa_pola_rag.json`) reads live from OpenSearch and Tempo: query volume, answer latency (avg/p95), question language distribution, citation rate, 👍/👎 feedback, retrieval time and LLM generation time. Every agent run is traced end-to-end (agent, LLM calls, tool execution, hybrid search) via OpenTelemetry. The [public dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c) is the same layout reading from Aiven's OpenSearch, fed by the live demo.
 
-## Limitations and future work
+</details>
 
-- Retrieval hit rate, even after reranking (60.0% hybrid @k=5), still has real, measured room to grow, driven by hundreds of near-duplicate tax-ordinance chunks: a chunk about "TASA POR X 2024" is lexically and semantically close to the near-identical "TASA POR X 2025" and "...2026" chunks, and the recency bonus in `search/hybrid.py` only nudges ties, it doesn't resolve genuine ambiguity about which year's figure the question is actually asking about. Dense, list-heavy tariff tables used to be a second, compounding problem on top of that: a table split across a chunk boundary, or laid out as bare digits once PyMuPDF's linear text extraction separated a row's label from its own figure, was the root cause of a real 49-tool-call runaway loop for one such question before `MAX_SEARCHES_PER_TURN` was added, and of a real user's thumbs-down after the search budget ran out with the figures still unfound. Both failure modes are fixed now (see "Retrieval" above: wider chunking keeps small tables intact, and `docling`'s table-aware extraction keeps each row's label next to its own figure); the near-duplicate-years problem above is the one that remains open. In practice this raw retrieval number understates real answer quality, since the agent's own Spanish query rewriting recovers most of what a standalone search with the question's original wording misses (see "Answer quality" above, 29/30), but it is still the ceiling on how well a single search call can do on the first try, before the agent gets a chance to rephrase.
-- A structured LLM output (a typed schema instead of free text) would remove the citation-formatting failure class in "Output format compliance" by construction, but needs a way to stream a structured field's text live without exposing the underlying JSON deltas to the chat UI, which the current streaming setup doesn't yet do.
-- Only 4 of santapola.es's 22 document categories are ingested; adding more is a one-line change to `CATEGORIES` in `scraper.py`.
-- MCP server exposing the agent to Claude Desktop and similar clients: a natural next step once the above is in place.
+<details>
+<summary><strong>Limitations and future work</strong></summary>
+
+- Retrieval hit rate (60.0% @k=5 after reranking) still has measured room to grow, driven by near-duplicate year-specific chunks ("TASA POR X 2024/2025/2026"): the recency bonus only nudges ties, it doesn't resolve which year the question means. In practice real answer quality is higher (29/30, thanks to the agent's query rewriting), but this is the ceiling for a first-try single search call.
+- A structured LLM output (typed schema instead of free text) would remove the citation-formatting failure class by construction, but needs live streaming of a structured field's text without exposing JSON deltas to the chat UI.
+- Only 4 of santapola.es's 22 document categories are ingested; extending is a one-line change to `CATEGORIES` in `scraper.py`.
+- An MCP server exposing the agent to Claude Desktop and similar clients is a natural next step.
+
+</details>
+
+<details>
+<summary><strong>Deployment notes (secrets and environment)</strong></summary>
+
+Everything is configured through environment variables (see `.env.example`): LLM provider (`LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`, any OpenAI-compatible endpoint; Z.ai by default, OpenRouter as drop-in), `OPENROUTER_API_KEY` for vision OCR, `POSTGRES_*` plus `POSTGRES_SSLMODE=require` for Neon, `OPENSEARCH_URL`/`OPENSEARCH_API_KEY`/`OPENSEARCH_USER` for Aiven basic auth, `MINIO_*` for R2, and `OTEL_EXPORTER_OTLP_ENDPOINT`/`_HEADERS` for Grafana Cloud. GitHub Actions secrets power the re-ingestion workflow (`.github/workflows/ingest.yml`); CI runs ruff and the test suite on every push and pull request.
+
+</details>
