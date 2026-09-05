@@ -7,10 +7,10 @@ from santa_pola_rag.config import settings
 from santa_pola_rag.indexing.chunking import Chunk
 from santa_pola_rag.indexing.embeddings import EMBEDDING_DIM
 
-# Benchmarked as a candidate to replace Qdrant, reusing the same Neon/Postgres
-# instance the ingestion pipeline's staging tables already require, rather
-# than a separate vector database account. Own schema, kept apart from dlt's
-# santa_pola_raw so a `reset_table` here can never touch staged page data.
+# Chosen over a separate managed vector database after benchmarking, reusing
+# the same Neon/Postgres instance the ingestion pipeline's staging tables
+# already require. Own schema, kept apart from dlt's santa_pola_raw so a
+# `reset_table` here can never touch staged page data.
 SCHEMA = "santa_pola_vectors"
 TABLE = "chunks"
 
@@ -118,10 +118,9 @@ def search(query_vector: list[float], top_k: int = 10) -> list[dict]:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Cosine distance (`<=>`, matching the hnsw vector_cosine_ops index
             # above) is 0 for identical vectors and grows from there; `1 -
-            # distance` keeps the same higher-is-better convention as Qdrant's
-            # COSINE score, which is all hybrid_search's RRF fusion relies on
-            # (it ranks by position, never compares raw scores across
-            # backends).
+            # distance` flips it to a higher-is-better score, which is all
+            # hybrid_search's RRF fusion relies on (it ranks by position, never
+            # compares raw scores across backends).
             cur.execute(
                 f"""
                 SELECT chunk_id, document_url, category_slug, title, page_number,
