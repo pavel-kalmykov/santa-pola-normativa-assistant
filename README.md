@@ -1,6 +1,6 @@
 # Santa Pola Municipal Ordinances Assistant
 
-A multilingual, conversational [RAG](https://arxiv.org/abs/2005.11401) (retrieval-augmented generation) assistant over the public municipal ordinances, tax ordinances, bylaws and public notices ("bandos") of Santa Pola, Spain. Residents come from dozens of countries and the source documents are Spanish-only PDFs, many of them scanned: ask in your own language, get an answer grounded in and cited from the actual ordinance. Capstone project for the [LLM Zoomcamp 2026](https://github.com/DataTalksClub/llm-zoomcamp).
+A multilingual, conversational [RAG](https://aws.amazon.com/what-is/retrieval-augmented-generation/) (retrieval-augmented generation) assistant over the public municipal ordinances, tax ordinances, bylaws and public notices ("bandos") of Santa Pola, Spain. Residents come from dozens of countries and the source documents are Spanish-only PDFs, many of them scanned: ask in your own language, get an answer grounded in and cited from the actual ordinance. Capstone project for the [LLM Zoomcamp 2026](https://github.com/DataTalksClub/llm-zoomcamp).
 
 **Live demo:** [santa-pola-normativa-assistant.streamlit.app](https://santa-pola-normativa-assistant.streamlit.app/) · **Live monitoring:** [public Grafana dashboard](https://beigegopher1006.grafana.net/public-dashboards/30eeddd150c54dcf891a08063d25123c)
 
@@ -15,9 +15,9 @@ A multilingual, conversational [RAG](https://arxiv.org/abs/2005.11401) (retrieva
 | Retrieval @ k=5 | Hit rate | MRR |
 |---|---|---|
 | Vector only ([pgvector](https://github.com/pgvector/pgvector)) | 30.0% | 0.171 |
-| Text only (OpenSearch [BM25](https://en.wikipedia.org/wiki/Okapi_BM25)) | 40.0% | 0.247 |
-| Hybrid ([RRF](https://dl.acm.org/doi/10.1145/1571941.1572114)), no reranking | 36.7% | 0.236 |
-| **Hybrid + [cross-encoder reranking](https://arxiv.org/abs/1908.10084) (deployed)** | **60.0%** | **0.457** |
+| Text only (OpenSearch [BM25](https://www.elastic.co/blog/practical-bm25-part-2-the-bm25-algorithm-and-its-variables)) | 40.0% | 0.247 |
+| Hybrid ([RRF](https://learn.microsoft.com/en-us/azure/search/hybrid-search-ranking)), no reranking | 36.7% | 0.236 |
+| **Hybrid + [cross-encoder reranking](https://www.sbert.net/examples/applications/cross-encoder/README.html) (deployed)** | **60.0%** | **0.457** |
 
 Answer quality (LLM-as-judge, different provider than the chat model to avoid self-preference): **29/30 passed**, the one "failure" being a correct out-of-scope refusal. Raw outputs in `eval/`.
 
@@ -119,7 +119,7 @@ These are real, un-cherry-picked results, not target numbers; `eval/retrieval_re
 <details>
 <summary><strong>Answer quality (LLM-as-judge): 29/30, and why that beats the 60% hit rate</strong></summary>
 
-`google/gemini-2.5-flash` (a different provider than the chat model, `glm-4.6` by default, to avoid self-preference bias) scores each answer on relevance, faithfulness and citation presence against the context the agent actually retrieved, reasoning step by step before a pass/fail verdict (`evaluation/llm_judge.py`), following the [LLM-as-a-judge](https://arxiv.org/abs/2306.05685) methodology. Full transcript in `eval/rag_judge_results.json`; regenerate with `uv run python scripts/evaluate_rag.py`.
+`google/gemini-2.5-flash` (a different provider than the chat model, `glm-4.6` by default, to avoid self-preference bias) scores each answer on relevance, faithfulness and citation presence against the context the agent actually retrieved, reasoning step by step before a pass/fail verdict (`evaluation/llm_judge.py`), following the [LLM-as-a-judge](https://hamel.dev/blog/posts/llm-judge/index.html) methodology. Full transcript in `eval/rag_judge_results.json`; regenerate with `uv run python scripts/evaluate_rag.py`.
 
 The one "failure" is the agent correctly declining an out-of-scope question (an EU regulation, not a Santa Pola ordinance); the judge scores a scope refusal as not relevant/cited, the expected shape for a correct refusal. The score sits far above raw retrieval hit rate (60.0% @k=5) for a real reason: the agent always phrases its own search queries in Spanish, so cross-lingual questions that a standalone `hybrid_search(question)` misses are frequently answered correctly once the agent's rewriting is in the loop. An earlier judge version built its context from a fresh `hybrid_search(item.question)` call instead, reproduced that cross-lingual miss inside the judge itself, and understated the score (8/10) for that reason rather than a real quality gap.
 
